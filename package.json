@@ -1,0 +1,30 @@
+{
+  "name": "garquinsfilm",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0",
+    "pnpm": ">=10.34.7"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @garquinsfilm/web --filter @garquinsfilm/api dev",
+    "build": "pnpm --recursive --if-present build",
+    "lint": "eslint . && pnpm format:check",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,js,json,css,html}\" \"packages/**/*.{ts,json,md}\" \"*.json\" \"*.mjs\" \"pnpm-workspace.yaml\" \"README.md\" \".github/workflows/*.yml\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,json,css,html}\" \"packages/**/*.{ts,json,md}\" \"*.json\" \"*.mjs\" \"pnpm-workspace.yaml\" \"README.md\" \".github/workflows/*.yml\"",
+    "typecheck": "pnpm --recursive --if-present typecheck",
+    "test": "pnpm --recursive --if-present test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.19.15",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^4.1.11"
+  }
+}
