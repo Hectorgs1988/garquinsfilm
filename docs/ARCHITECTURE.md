@@ -1,35 +1,71 @@
-# Arquitectura propuesta (no definitiva)
+# Arquitectura de GarquinsFilm
 
 ## Estilo
-Monorepo con frontend, API y contratos compartidos; backend modular monolítico, no microservicios.
 
-## Stack candidato
+Monorepositorio con frontend, API y contratos compartidos. El backend será un monolito modular; no se introducirán microservicios ni Kubernetes.
+
+## Stack aprobado
+
 - `apps/web`: React + TypeScript + Vite + Tailwind CSS.
-- `apps/api`: Node.js + TypeScript + Express (o Fastify, pendiente de decisión).
-- `packages/shared`: tipos, validaciones y contratos.
-- ORM: Prisma (candidato).
-- BD: PostgreSQL o MySQL, **PENDIENTE** (no asumir MySQL por analogía con otros proyectos).
-- Autenticación: sesiones seguras/cookies HttpOnly o proveedor externo **PENDIENTE**.
-- Infra: despliegue local en desarrollo; staging y producción **PENDIENTES**.
+- `apps/api`: Node.js + TypeScript + Fastify.
+- Persistencia: PostgreSQL + Prisma.
+- Monorepositorio: pnpm workspaces.
+- Contratos compartidos: `packages/shared` para tipos y validaciones compartidas cuando corresponda.
+- Pruebas: Vitest y Playwright.
+- CI: GitHub Actions.
+- Catálogo externo: TMDB, accedido desde el servidor.
 
-## Capas
-Web → API propia → persistencia propia / adaptador externo TMDB. La clave TMDB permanece en servidor. Nunca realizar llamadas autenticadas a TMDB desde el navegador con secreto embebido.
+Las versiones concretas deben seleccionarse con compatibilidad y soporte vigentes. En particular, Better Auth se integrará solo después de validar su compatibilidad con Fastify y Prisma.
 
-## Propuesta de estructura futura
-```
-apps/web/
-apps/api/
-packages/shared/
+## Autenticación
+
+Better Auth está aprobado para email/contraseña y sesiones seguras, condicionado a la validación de compatibilidad indicada arriba. El producto requiere registro por invitación y recuperación de contraseña.
+
+El proveedor/canal de correo para invitaciones y recuperación sigue pendiente. No se deben fijar ni desplegar servicios de correo hasta que se aprueben.
+
+## Estructura del monorepositorio
+
+```text
+apps/
+  web/
+  api/
+packages/
+  shared/
 docs/
-.github/workflows/
+.github/
+  agents/
+  workflows/
 ```
 
-## Entornos y calidad
-- Desarrollo: frontend y backend locales, BD reproducible, variables en `.env` ignorado.
-- CI: instalar dependencias de forma reproducible, lint, tipos, tests y build.
-- Staging/producción: TLS, rotación de secretos, backups y migraciones controladas (decidir proveedores antes de despliegue).
-- Logs sin PII ni secretos y errores estables con request ID.
-- Pruebas de integración de permisos, duplicados, puntuaciones y estados.
+La API será responsable de autorización, acceso a PostgreSQL y la integración con TMDB. `packages/shared` no contendrá acceso a la base de datos ni dependerá de modelos generados por Prisma.
 
-## Principios
-No bloquear al frontend por las caídas de TMDB más allá de lo imprescindible; TTL/cache conforme a condiciones de uso; peticiones paginadas y limitación de tasa; separación de datos externos de datos personales.
+## Límites y flujo de datos
+
+```text
+React web → API Fastify → módulos de dominio → Prisma/PostgreSQL
+                                      └──────→ adaptador TMDB
+```
+
+La clave TMDB se mantiene en el servidor. El navegador no realiza llamadas que requieran un secreto. Los datos del catálogo se separan de los datos privados de cada usuario; la caché depende de los términos de TMDB.
+
+## Entornos
+
+- **Desarrollo local:** Docker con PostgreSQL; aplicaciones web y API ejecutadas localmente.
+- **Staging y producción:** hosting, topología, dominios, TLS, copias de seguridad y proveedores **pendientes**.
+- No crear infraestructura remota ni despliegues automáticos hasta aprobar las decisiones de hosting.
+
+## Calidad y operación
+
+- GitHub Actions validará instalación reproducible, lint, tipos, pruebas y build conforme se incorporen los scripts.
+- Vitest cubrirá lógica y pruebas de módulos; Playwright cubrirá recorridos E2E seleccionados.
+- Las migraciones de Prisma deben ser reproducibles y revisarse antes de aplicarse a entornos compartidos.
+- Los logs no deben contener secretos, contraseñas, tokens de invitación ni datos personales innecesarios.
+- La API valida entradas y aplica autorización en el servidor para biblioteca, valoraciones, progreso y listas.
+
+## Pendientes relacionados
+
+- Compatibilidad y versiones de Better Auth, Fastify y Prisma.
+- Proveedor de correo.
+- Hosting de staging y producción, TLS, dominios y estrategia de backups.
+- Condiciones TMDB para atribución, almacenamiento en caché y uso de imágenes.
+- Identidad visual definitiva.
