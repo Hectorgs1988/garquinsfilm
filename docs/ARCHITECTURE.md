@@ -13,13 +13,13 @@ Monorepositorio con frontend, API y contratos compartidos. El backend será un m
 - Contratos compartidos: `packages/shared` para tipos y validaciones compartidas cuando corresponda.
 - Pruebas: Vitest y Playwright.
 - CI: GitHub Actions.
-- Catálogo externo: TMDB, accedido desde el servidor.
+- Catálogo externo: TMDB API v3, accedido desde un módulo de catálogo del servidor (ADR-007).
 
-La integración de Better Auth 1.7.11 y su adaptador Prisma 1.7.11 con Fastify 5.12.7 y Prisma 7.10.1 se probó localmente. Los modelos de autenticación y su migración versionada se validaron en una base PostgreSQL 17 aislada. La ejecución real de GitHub Actions queda pendiente hasta abrir la Pull Request; cualquier cambio de estas versiones exige revalidación.
+La integración de Better Auth 1.7.11 y su adaptador Prisma 1.7.11 con Fastify 5.12.7 y Prisma 7.10.1 se probó localmente. Los modelos de autenticación y su migración versionada se validaron en una base PostgreSQL 17 aislada. La autenticación ya está integrada en `develop` mediante la PR #11 y GitHub Actions finalizó correctamente; cualquier cambio de estas versiones exige revalidación.
 
 ## Autenticación
 
-Better Auth es responsable de email/contraseña y sesiones seguras. La integración core se implementó con Better Auth y `@better-auth/prisma-adapter` 1.7.11, Fastify 5.12.7 y Prisma 7.10.1; el puente HTTP, los modelos, la migración y los flujos se probaron con PostgreSQL efímero 17. La CI está configurada para repetir los tests, pero su ejecución real queda pendiente hasta abrir la Pull Request.
+Better Auth es responsable de email/contraseña y sesiones seguras. La integración core se implementó con Better Auth y `@better-auth/prisma-adapter` 1.7.11, Fastify 5.12.7 y Prisma 7.10.1; el puente HTTP, los modelos, la migración y los flujos se probaron con PostgreSQL efímero 17. La CI repite los tests; la implementación de autenticación se integró en `develop` mediante la PR #11 y GitHub Actions finalizó correctamente.
 
 La API montará los endpoints de Better Auth bajo `/api/auth/*` mediante la integración HTTP catch-all adecuada para Fastify. Better Auth reutilizará el singleton Prisma Client de `apps/api`; no se crearán clientes ni pools duplicados. La configuración de base de datos y sus migraciones permanecerá dentro de `apps/api`.
 
@@ -31,7 +31,7 @@ Los administradores pueden crear, listar y revocar invitaciones; la aceptación 
 
 La recuperación usa los endpoints Better Auth `POST /api/auth/request-password-reset` y `POST /api/auth/reset-password`; las respuestas de solicitud son genéricas, los enlaces expiran en una hora y son de un solo uso, y el cambio de contraseña revoca las sesiones existentes. Ante fallo de envío, se invalida la verificación temporal si la base de datos está disponible y se registra únicamente el tipo de error; las respuestas siguen siendo genéricas. No se desactivan CSRF ni comprobaciones de origen. Se limitan los intentos de autenticación/recuperación y no se registran contraseñas, cookies ni tokens. Cookies y sesiones deben configurarse de forma segura según el entorno. CORS y cualquier proxy de confianza se configurarán con orígenes/IPs explícitos, sin confiar indiscriminadamente en headers reenviados.
 
-La API entrega invitaciones y enlaces de recuperación mediante una interfaz de correo independiente de negocio; el adaptador SMTP se configura mediante variables de entorno y en desarrollo puede usar Mailpit local. Se consideran entregados solo cuando el servidor SMTP acepta al destinatario, no cuando llega a su bandeja final. Los tests inyectan un remitente simulado. Los tokens se incluyen en fragmentos URL para evitar que el navegador los envíe en la petición de navegación. El frontend (WEB-AUTH-001) los lee del fragmento al cargar `/accept-invitation` o `/reset-password`, los retira de la barra de direcciones antes de montar la interfaz y los envía únicamente en el cuerpo de la petición a la API; no los guarda en almacenamiento del navegador. Los enlaces SMTP de invitación incluyen `email` y `token`; el CLI local puede generar enlaces con solo `token`, en cuyo caso el formulario pide el correo y la API valida ambos datos. El frontend consume la API Fastify y Better Auth mediante un cliente centralizado de mismo origen (proxy `/api` de Vite en desarrollo), con cookies de sesión HttpOnly gestionadas por Better Auth, y valida la sesión en servidor con `GET /api/me`. La interfaz es Mobile First: navegación inferior en móvil y lateral en escritorio. WEB-AUTH-001 está implementado y probado localmente, pendiente de integración mediante PR; no hay E2E de navegador en CI. Better Auth genera tokens de recuperación con caducidad de una hora y un solo uso, y revoca las sesiones al restablecer contraseña. No se ha aprobado un proveedor remoto; producción no puede usar Mailpit ni un SMTP loopback.
+La API entrega invitaciones y enlaces de recuperación mediante una interfaz de correo independiente de negocio; el adaptador SMTP se configura mediante variables de entorno y en desarrollo puede usar Mailpit local. Se consideran entregados solo cuando el servidor SMTP acepta al destinatario, no cuando llega a su bandeja final. Los tests inyectan un remitente simulado. Los tokens se incluyen en fragmentos URL para evitar que el navegador los envíe en la petición de navegación. El frontend (WEB-AUTH-001) los lee del fragmento al cargar `/accept-invitation` o `/reset-password`, los retira de la barra de direcciones antes de montar la interfaz y los envía únicamente en el cuerpo de la petición a la API; no los guarda en almacenamiento del navegador. Los enlaces SMTP de invitación incluyen `email` y `token`; el CLI local puede generar enlaces con solo `token`, en cuyo caso el formulario pide el correo y la API valida ambos datos. El frontend consume la API Fastify y Better Auth mediante un cliente centralizado de mismo origen (proxy `/api` de Vite en desarrollo), con cookies de sesión HttpOnly gestionadas por Better Auth, y valida la sesión en servidor con `GET /api/me`. La interfaz es Mobile First: navegación inferior en móvil y lateral en escritorio. WEB-AUTH-001 está implementado, probado localmente e integrado en `develop` (PR #11); no hay E2E de navegador en CI. Better Auth genera tokens de recuperación con caducidad de una hora y un solo uso, y revoca las sesiones al restablecer contraseña. No se ha aprobado un proveedor remoto; producción no puede usar Mailpit ni un SMTP loopback.
 
 ## Estructura del monorepositorio
 
@@ -53,10 +53,47 @@ La API será responsable de autorización, acceso a PostgreSQL y la integración
 
 ```text
 React web → API Fastify → módulos de dominio → Prisma/PostgreSQL
-                                      └──────→ adaptador TMDB
+                                      └──────→ módulo de catálogo → TMDB API v3
 ```
 
 La clave TMDB se mantiene en el servidor. El navegador no realiza llamadas que requieran un secreto. Los datos del catálogo se separan de los datos privados de cada usuario; la caché depende de los términos de TMDB.
+
+## Módulo de catálogo TMDB (ADR-007 — diseño aprobado, sin implementar)
+
+Módulo dentro del monolito `apps/api`; sin microservicios, Redis ni bases de datos adicionales. Ver contratos, errores, caché y condiciones de TMDB en `docs/API_INTEGRATION.md`.
+
+```text
+apps/api/src/catalog/
+  tmdb.config.ts      # lectura y validación de TMDB_* (patrón de auth/config.ts)
+  tmdb.client.ts      # cliente HTTP de TMDB: Bearer, timeout, host fijo, reintentos acotados
+  tmdb.errors.ts      # errores tipados del cliente y su traducción a HTTP
+  catalog.service.ts  # casos de uso: búsqueda y detalles; normalización; construcción de URLs de imagen
+  catalog.cache.ts    # caché en memoria con TTL y límite de entradas
+  catalog-routes.ts   # plugin Fastify: esquemas Ajv, sesión, rate limit
+packages/shared/      # contratos TypeScript del catálogo (sin lógica de servidor)
+```
+
+**Responsabilidades**
+
+- `tmdb.config.ts`: valida `TMDB_READ_ACCESS_TOKEN`, `TMDB_TIMEOUT_MS`, `TMDB_DEFAULT_LANGUAGE` y `TMDB_DEFAULT_REGION`. Se evalúa solo al activar el catálogo: su ausencia no impide arrancar la API ni ejecutar las pruebas de autenticación.
+- `tmdb.client.ts`: único punto que habla con TMDB. Host y esquema fijos (`https://api.themoviedb.org/3`), sin URL base configurable ni URLs aportadas por el usuario (prevención de SSRF). Cabecera `Authorization: Bearer`, `AbortSignal` para el timeout, reintentos acotados solo en GET idempotentes y respuestas tipadas. No registra token ni consulta completa.
+- `tmdb.errors.ts`: errores propios (no encontrado, límite, no disponible, timeout, respuesta inválida) sin datos internos de TMDB.
+- `catalog.service.ts`: orquesta caché y cliente; elige `search/movie`, `search/tv` o `search/multi` (filtrando personas); normaliza a los contratos compartidos (nulos en lugar de ceros, fallback de idioma, `isSpecial` para la temporada 0) y construye URLs de imagen de `image.tmdb.org` con tamaños de una lista permitida.
+- `catalog.cache.ts`: caché en memoria con TTL y tope de entradas; la lectura verifica la expiración y nunca devuelve entradas caducadas (sin `stale-if-error`). No guarda credenciales.
+- `catalog-routes.ts`: plugin Fastify con las tres rutas aprobadas. Exige sesión Better Auth con el patrón de `auth/routes.ts` (`authInstance.api.getSession`, 401 genérico y `logSafeError`), valida con esquemas Ajv (`additionalProperties: false`, página 1–500), aplica `config.rateLimit` por ruta y traduce errores a 400/401/404/429/502/503/504 con cuerpo `{ error }`.
+
+**Inyección y pruebas.** `buildApp` recibirá una dependencia opcional `catalog` (cliente o servicio), igual que `database`, `invitationDelivery` y `auth`. Las pruebas inyectan un cliente TMDB simulado con fixtures; CI no usa credenciales ni red real. La instanciación por defecto solo ocurre si el catálogo está configurado.
+
+**Contratos compartidos (`packages/shared`).** Contiene solo tipos y constantes sin dependencias de servidor ni de Prisma (identidad `{ source, type, tmdbId }`, resultados de búsqueda, detalles, temporadas, límites de validación). Estado actual: `packages/shared` exporta `./src/index.ts` (TypeScript fuente) y no tiene consumidores; la API compila con `tsc` (`module`/`moduleResolution` `NodeNext`, `rootDir: src`) y la web con Vite (`moduleResolution: Bundler`). Dirección propuesta, **a validar y cerrar en TMDB-API-001** (primera tarea que lo consume):
+
+- Declarar `@garquinsfilm/shared` como dependencia `workspace:*` en `apps/api` y `apps/web`.
+- Compilar `packages/shared` a `dist` con declaraciones y exponer `types`/`default` en su `exports`, de modo que la API (ESM/NodeNext) importe JavaScript y tipos ya compilados y no un `.ts` fuera de su `rootDir`, y Vite/TypeScript (Bundler) resuelvan el mismo paquete.
+- Ejecutar el build de `packages/shared` antes de `typecheck`, `test` y `build` de sus consumidores (en el orden topológico de pnpm y en CI), siguiendo el precedente de `prisma:generate`.
+- Importar con rutas de paquete (`@garquinsfilm/shared`), sin rutas relativas entre paquetes. Sin dependencias nuevas salvo necesidad justificada y aprobada.
+
+Si esa vía no resulta viable, se propondrá una alternativa a revisión antes de implementar; la decisión aprobada es el uso de `packages/shared`, no su mecanismo de build.
+
+**Interfaz (futura, WEB-CATALOG-001/002).** El frontend consume únicamente `/api/search` y `/api/media/...` mediante el cliente centralizado `apps/web/src/api.ts`, sin ninguna credencial de TMDB. Las imágenes se cargan desde la CDN con las URLs devueltas por la API, con marcador de posición si son `null`. La atribución de TMDB (logo oficial menos prominente que el de GarquinsFilm y aviso) debe ser visible en la interfaz, según `docs/API_INTEGRATION.md`.
 
 ## Entornos
 
@@ -74,11 +111,11 @@ La clave TMDB se mantiene en el servidor. El navegador no realiza llamadas que r
 
 ## Pendientes relacionados
 
-- Ejecutar y revisar los checks de GitHub Actions al abrir la Pull Request.
-- Ejecutar y revisar GitHub Actions al abrir la Pull Request de invitaciones/bootstrap.
-- La integración SMTP local para invitaciones y recuperación de contraseña está implementada y probada con Mailpit y un remitente simulado. Los formularios frontend de aceptación de invitación y restablecimiento (WEB-AUTH-001) están implementados y probados localmente, pendientes de integración mediante PR. QA validó localmente el envío SMTP real de invitaciones desde `POST /api/admin/invitations` hasta Mailpit y la aceptación (PostgreSQL temporal, cuentas ficticias); no equivale a la entrega con un proveedor de producción. Siguen pendientes el proveedor de correo para producción, GitHub Actions de la PR de WEB-AUTH-001 y las pruebas en dispositivo móvil físico.
+- GitHub Actions de la autenticación (invitaciones/bootstrap, recuperación y WEB-AUTH-001) finalizó correctamente tras integrar la PR #11 en `develop`. La CI de TMDB-DOC-001 sigue pendiente hasta abrir su Pull Request.
+- La integración SMTP local para invitaciones y recuperación de contraseña está implementada y probada con Mailpit y un remitente simulado. Los formularios frontend de aceptación de invitación y restablecimiento (WEB-AUTH-001) están implementados, probados localmente e integrados en `develop` (PR #11). QA validó localmente el envío SMTP real de invitaciones desde `POST /api/admin/invitations` hasta Mailpit y la aceptación (PostgreSQL temporal, cuentas ficticias); no equivale a la entrega con un proveedor de producción. Siguen pendientes el proveedor de correo para producción y las pruebas en dispositivo móvil físico.
 - Mejora futura: interfaz de administración para consultar y gestionar invitaciones `PENDING_DELIVERY` y `DELIVERY_FAILED`; el procedimiento actual de revisión, revocación y nueva emisión es manual.
 - Proveedor de correo remoto; Mailpit local y remitente simulado en tests sí están aprobados.
 - Hosting de staging y producción, TLS, dominios y estrategia de backups.
-- Condiciones TMDB para atribución, almacenamiento en caché y uso de imágenes.
+- Condiciones TMDB (TMDB-TERMS-001): validación del uso previsto, compatibilidad con la cláusula de «derivados» y ubicación exacta de la atribución. Arquitectura del catálogo aprobada en ADR-007; implementación pendiente (TMDB-API-001/002/003, WEB-CATALOG-001/002).
+- Mecanismo de build de `packages/shared` para API y web (se cierra en TMDB-API-001).
 - Identidad visual definitiva.

@@ -1,6 +1,6 @@
 # GarquinsFilm
 
-Monorepositorio pnpm para la aplicación web y la API de GarquinsFilm. La API usa Better Auth para autenticación, invitaciones y recuperación de contraseña; las funcionalidades de biblioteca/catálogo siguen pendientes.
+Monorepositorio pnpm para la aplicación web y la API de GarquinsFilm. La API usa Better Auth para autenticación, invitaciones y recuperación de contraseña; las funcionalidades de biblioteca siguen pendientes y el catálogo TMDB tiene su diseño aprobado (ADR-007) pero no está implementado.
 
 ## Requisitos
 
@@ -117,7 +117,7 @@ El adaptador genérico considera entregado un correo únicamente cuando el servi
 
 ## Interfaz de autenticación local
 
-**Estado de WEB-AUTH-001:** implementado y probado localmente en `feature/web-auth-pages`; pendiente de integración mediante Pull Request hacia `develop` y de la ejecución de GitHub Actions.
+**Estado de WEB-AUTH-001:** implementado, probado localmente e integrado en `develop` (PR #11, GitHub Actions finalizado correctamente); no está desplegado en producción.
 
 La primera interfaz incluye `/login`, `/accept-invitation`, `/forgot-password`, `/reset-password` y el área privada `/app`. Se conecta con la API real de Fastify y Better Auth: no hay datos simulados. El servidor Vite publica un proxy de mismo origen para `/api` hacia Fastify en `127.0.0.1:3001`; las cookies de Better Auth se envían con credenciales y la ruta privada se valida en servidor mediante `GET /api/me`. No se guardan credenciales ni tokens en almacenamiento del navegador.
 
@@ -140,7 +140,7 @@ Abre <http://127.0.0.1:5173/login>. Si Corepack local no es compatible, utiliza 
 - **Comprobado manualmente (local):** login del administrador creado por bootstrap, persistencia de sesión al recargar, logout, protección de `/app` sin sesión, solicitud de recuperación con correo en Mailpit, restablecimiento y rechazo de la contraseña anterior, creación de invitación por CLI, aceptación desde el frontend, login del segundo usuario e invitación `CONSUMED`.
 - **Auditoría QA:** revisión Mobile First con Playwright a 360, 390 y 430 px y escritorio (sin scroll horizontal, controles de 44 px o más, navegación inferior, footer oculto bajo 1024 px) y comprobaciones de roles contra PostgreSQL temporal. No hay pruebas E2E de navegador en CI.
 - **Validado por QA con SMTP real local:** administrador autenticado → `POST /api/admin/invitations` → SMTP → Mailpit → enlace → aceptación, con PostgreSQL temporal aislado y cuentas ficticias. Resultados: HTTP 201 sin token ni hash en la respuesta; correo recibido en Mailpit; enlace `/accept-invitation#email=…&token=…` sin query string; invitación `ACTIVE` solo tras la entrega y la persistencia; aceptación correcta con usuario de rol `user`; reutilización del token rechazada (400, `CONSUMED`); usuario no administrador con 403 y sin correo enviado; fallo SMTP (503) sin invitaciones `ACTIVE`. Esta validación es solo local con Mailpit: confirma la aceptación SMTP, no la entrega a una bandeja real ni a un proveedor de producción. Se ejecutó con un script desechable contra la API (no desde el navegador) y no está automatizada en CI.
-- **Pendiente:** ejecución de GitHub Actions sobre la PR de WEB-AUTH-001; pruebas en un dispositivo móvil físico (teclado virtual y safe areas reales); proveedor SMTP de producción; cierre definitivo de ADR-006. PWA, modo offline y notificaciones push quedan fuera del alcance actual.
+- **Pendiente:** pruebas en un dispositivo móvil físico (teclado virtual y safe areas reales); proveedor SMTP de producción; cierre definitivo de ADR-006. PWA, modo offline y notificaciones push quedan fuera del alcance actual.
 
 ### Prueba manual de invitación y recuperación
 
@@ -253,7 +253,7 @@ apps/
   api/       Fastify + TypeScript
   web/       React + TypeScript + Vite + Tailwind CSS
 packages/
-  shared/    espacio para contratos compartidos; aún vacío
+  shared/    contratos compartidos; vacío por ahora (el catálogo TMDB será su primer uso, ADR-007)
 docs/        requisitos y decisiones del producto
 .github/
   workflows/ validación continua en PR
