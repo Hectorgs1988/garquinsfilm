@@ -8,13 +8,14 @@
     "pnpm": ">=10.34.7"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @garquinsfilm/web --filter @garquinsfilm/api dev",
+    "dev": "pnpm build:shared && pnpm --parallel --filter @garquinsfilm/web --filter @garquinsfilm/api dev",
     "build": "pnpm --recursive --if-present build",
+    "build:shared": "pnpm --filter @garquinsfilm/shared build",
     "lint": "eslint . && pnpm format:check",
     "format": "prettier --write \"apps/**/*.{ts,tsx,js,json,css,html}\" \"packages/**/*.{ts,json,md}\" \"*.json\" \"*.mjs\" \"pnpm-workspace.yaml\" \"README.md\" \".github/workflows/*.yml\"",
     "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,json,css,html}\" \"packages/**/*.{ts,json,md}\" \"*.json\" \"*.mjs\" \"pnpm-workspace.yaml\" \"README.md\" \".github/workflows/*.yml\"",
-    "typecheck": "pnpm --recursive --if-present typecheck",
-    "test": "pnpm --recursive --if-present test"
+    "typecheck": "pnpm build:shared && pnpm --recursive --if-present typecheck",
+    "test": "pnpm build:shared && pnpm --recursive --if-present test"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

@@ -1,7 +1,7 @@
 # Integración con TMDB
 
 **Sitio:** https://developer.themoviedb.org/
-**Estado:** diseño aprobado en ADR-007 (`docs/DECISIONS.md`); **nada de lo descrito aquí está implementado todavía**. La implementación se reparte en TMDB-API-001/002/003 y WEB-CATALOG-001/002 (`docs/TASKS.md`).
+**Estado:** diseño aprobado en ADR-007 (`docs/DECISIONS.md`). **Implementado localmente (TMDB-API-001, rama `feature/tmdb-api-client`, pendiente de PR y GitHub Actions):** contratos TypeScript en `packages/shared`, configuración, cliente HTTP, errores tipados y su conversión HTTP, e inyección (`tmdbClient` / `app.tmdb`); véase «Cliente TMDB implementado». **No implementado todavía:** rutas `/api/search` y `/api/media/...`, normalización, caché y la interfaz (TMDB-API-002/003 y WEB-CATALOG-001/002, `docs/TASKS.md`). Ninguna prueba ni CI realiza llamadas reales a TMDB, y TMDB-TERMS-001 sigue pendiente.
 
 Convención de este documento: **[Oficial]** requisito de TMDB; **[Aprobado]** decisión del responsable registrada en ADR-007; **[Propuesta]** valor o detalle de implementación a confirmar en la tarea correspondiente; **[PENDIENTE]** sin decisión.
 
@@ -181,13 +181,39 @@ Reglas:
 ## Robustez y seguridad
 
 - **[Aprobado]** `TMDB_READ_ACCESS_TOKEN` es un secreto exclusivo del backend: no se envía al navegador, no aparece en respuestas, logs, errores ni CI, y no se versiona.
-- **[Propuesta]** Timeout por petición de `TMDB_TIMEOUT_MS` (por defecto 5000 ms, acotado a un rango razonable) mediante `AbortSignal`.
-- **[Propuesta]** Reintentos acotados (como máximo 2) con backoff, solo para peticiones GET idempotentes y solo ante errores de red, timeout, 502/503/504. Un 429 de TMDB no se reintenta salvo que `Retry-After` indique una espera breve y fiable; en otro caso se devuelve 429 al cliente. Hay un presupuesto de tiempo total por petición del usuario.
+- **[Propuesta; implementado en TMDB-API-001]** Timeout por petición de `TMDB_TIMEOUT_MS` (por defecto 5000 ms; rango válido 1000–15000 ms, fuera del cual la configuración se rechaza).
+- **[Propuesta; implementado en TMDB-API-001]** Reintentos acotados (como máximo 2) con backoff de 250 y 500 ms, solo para peticiones GET idempotentes y solo ante errores de red, timeout, 502/503/504. Un 429 de TMDB no se reintenta salvo que `Retry-After` indique una espera de 2 s o menos; en otro caso se devuelve 429 al cliente. Hay un presupuesto de tiempo total por llamada, reintentos y esperas incluidos (por defecto, el doble del timeout), y el plazo de cada intento nunca supera lo que queda de él. No se reintentan 404, otros 4xx, JSON inválido ni un 500 genérico.
 - **Anti-SSRF [Aprobado: host fijo]:** el cliente llama únicamente a `https://api.themoviedb.org/3` (host y esquema fijos en código; sin variable de URL base) y solo con rutas construidas por el servidor a partir de enteros y de parámetros validados. Nunca se hace una petición a una URL aportada por el usuario ni se siguen redirecciones a otros hosts.
 - Validación estricta de entradas (Ajv, `additionalProperties: false`), límite de página 500, longitud máxima de `q` y `include_adult=false` fijo.
 - Rate limiting propio por ruta mediante el plugin existente. **[Propuesta]** valores iniciales: búsqueda 30/min y detalles 60/min por usuario o IP.
-- Logs sanitizados: solo tipo de error, código de estado y duración; nunca el token ni la consulta `q` completa.
+- Logs sanitizados: solo tipo de error, motivo, código de estado, intento y duración; nunca el token, la consulta `q` ni fragmentos del cuerpo remoto.
 - TMDB caído: error controlado y recuperable en la interfaz; los datos propios (biblioteca, valoraciones, listas) no dependen de TMDB y no se ven afectados.
+
+### Cliente TMDB implementado (TMDB-API-001)
+
+Estado: implementado localmente en `feature/tmdb-api-client`, **pendiente de PR y GitHub Actions**. Sin rutas de catálogo y sin llamadas reales a TMDB (tests con transporte simulado). Código en `apps/api/src/catalog/` y contratos en `packages/shared`.
+
+- **Autenticación:** cabecera `Authorization: Bearer <TMDB_READ_ACCESS_TOKEN>`; nunca en la URL, y se rechaza `api_key` como parámetro. El token se valida (sin espacios ni caracteres de control) y solo se exige al usar el catálogo (`getTmdbConfig()` perezoso); la API arranca y autentica sin él.
+- **Peticiones:** solo `GET` a `https://api.themoviedb.org/3`; segmentos de ruta estáticos o enteros positivos, parámetros codificados con `URLSearchParams`, `redirect: 'error'` (las redirecciones se rechazan, no se siguen; hoy se clasifican como fallo de red, ver el mapeo).
+- **Plazo garantizado:** cada intento es una carrera entre la operación completa (petición y lectura del cuerpo) y un temporizador, además del `AbortController`. Vence con `TmdbTimeoutError` aunque el transporte ignore la señal; una respuesta tardía se cancela y descarta sin rechazos sin gestionar.
+- **Cuerpo limitado:** máximo 2.000.000 de bytes (`TMDB_MAX_BODY_BYTES`). Se rechaza por `Content-Length` excesivo sin leer y, en su defecto o si es falso, se lee por fragmentos con acumulador acotado y se cancela al superarlo; el JSON solo se interpreta tras validar el tamaño.
+- **`Retry-After`:** solo se considera fiable en segundos enteros de 0 a 3600; una fecha HTTP, un decimal, un negativo o un valor mayor se ignoran y no se reenvían.
+- **Errores tipados → HTTP** (`toCatalogHttpError`):
+
+  | Error                      | Origen                                        | HTTP                                      |
+  | -------------------------- | --------------------------------------------- | ----------------------------------------- |
+  | `TmdbNotFoundError`        | 404 de TMDB                                   | 404                                       |
+  | `TmdbRateLimitError`       | 429 de TMDB                                   | 429 (con `Retry-After` solo si es fiable) |
+  | `TmdbInvalidResponseError` | JSON inválido, cuerpo excesivo, otros 3xx/4xx | 502                                       |
+  | `TmdbUnavailableError`     | red, 5xx, 401/403 de TMDB                     | 503                                       |
+  | `TmdbConfigError`          | token ausente o configuración inválida        | 503                                       |
+  | `TmdbTimeoutError`         | plazo agotado                                 | 504                                       |
+
+  Los mensajes públicos son genéricos; la causa interna (`reason`) no se envía al cliente.
+
+- **Inyección:** `buildApp({ tmdbClient })` y `app.tmdb.get()` (proveedor perezoso); los tests inyectan un cliente simulado `{ language, region, getJson }`. TMDB-API-002/003 construirán sobre él `catalog.service.ts`.
+- **Variables:** `TMDB_DEFAULT_LANGUAGE` (`xx-XX`, por defecto `es-ES`) y `TMDB_DEFAULT_REGION` (`XX`, por defecto `ES`) se validan; el cliente las expone como `language` y `region`.
+- **Pendiente para TMDB-API-002/003:** el cliente devuelve `unknown`; la validación y normalización de las respuestas, la caché y las rutas.
 - **Imágenes [Aprobado: sin proxy]:** el servidor construye `https://image.tmdb.org/t/p/{tamaño}{ruta}` a partir de los `*_path` de TMDB, con host fijo y tamaños de una lista permitida. **[Propuesta]** inicial: póster `w342` en búsqueda y `w500` en detalle (`w185` para temporadas), fondo `w780`. El navegador las descarga directamente de la CDN; la IP del usuario llega a TMDB (consecuencia aceptada en ADR-007). Una ruta ausente, no válida o con tamaño no permitido produce `null`.
 - **Pruebas:** mocks y fixtures del cliente TMDB inyectados en la aplicación; ninguna prueba ni CI usa credenciales reales ni red real.
 - La credencial solo es necesaria cuando se active el catálogo; su ausencia no impide arrancar la API ni ejecutar las pruebas de autenticación existentes.

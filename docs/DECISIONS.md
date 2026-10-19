@@ -99,7 +99,7 @@ La implementación inicial de autenticación y primera navegación privada (WEB-
 
 ## ADR-007 — Integración TMDB
 
-**Estado: PARCIALMENTE APROBADO — decisiones arquitectónicas aprobadas; validación legal (TMDB-TERMS-001) PENDIENTE; implementación no iniciada**
+**Estado: PARCIALMENTE APROBADO — decisiones arquitectónicas aprobadas; validación legal (TMDB-TERMS-001) PENDIENTE; implementación en curso: TMDB-API-001 (cliente y contratos) implementada localmente en `feature/tmdb-api-client`, pendiente de PR y GitHub Actions; TMDB-API-002/003 y WEB-CATALOG-001/002 no iniciadas**
 
 ### Contexto
 

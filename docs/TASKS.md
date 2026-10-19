@@ -52,7 +52,8 @@
 
 - **Integrado en `develop` (no en producción):** WEB-AUTH-001 (PR #11) y las tareas AUTH anteriores.
 - **TMDB-DOC-001:** documentación redactada en `docs/tmdb-integration-design`; pendiente de revisión del responsable y de PR a `develop`.
-- **Pendientes, sin iniciar:** TMDB-API-001, TMDB-API-002, TMDB-API-003, WEB-CATALOG-001, WEB-CATALOG-002. Documentarlas no las marca como implementadas.
+- **TMDB-API-001:** implementada localmente en `feature/tmdb-api-client` (contratos en `packages/shared`; configuración perezosa, cliente con Bearer, plazo garantizado por intento, presupuesto total, máximo 2 reintentos, `Retry-After` en segundos enteros de 0 a 3600, redirecciones rechazadas, cuerpo limitado a 2 MB con lectura incremental; errores tipados con conversión HTTP; inyección `tmdbClient` / `app.tmdb`; tests con mocks). Timeout por defecto 5 s, rango 1.000–15.000 ms. Revisada por Architect y pendiente de QA, PR y GitHub Actions. Sin rutas de catálogo ni llamadas reales a TMDB; TMDB-TERMS-001 sigue pendiente.
+- **Pendientes, sin iniciar:** TMDB-API-002, TMDB-API-003, WEB-CATALOG-001, WEB-CATALOG-002. Documentarlas no las marca como implementadas.
 - **Pendientes de decisión:** TMDB-TERMS-001, ADR-006 (identidad visual), DISC-TV-DECISION-001 (rankings de series), INFRA-DECISION-001.
 - **Pendientes de implementación, dependientes del catálogo:** bibliotecas (LIB-001), valoraciones (RATING-001), progreso (TV-001), listas compartidas (LIST-001) y rankings (DISC-*).
 - **Observación:** `QA-001` cita `AUTH-001D`, que no está definida en esta tabla; revisar su referencia (WEB-AUTH-001 cubre el frontend de autenticación).
