@@ -31,6 +31,7 @@ describe.skipIf(!integrationTestsEnabled)('local-only PostgreSQL-to-Compose asso
   let clonePrisma: PrismaClient;
   let originalIdentity: LocalDatabaseIdentity;
   let originalDependencies: LocalOnlyDockerDependencies;
+  const startedProjects = new Set<string>();
 
   beforeAll(async () => {
     originalPort = await reserveEphemeralPort();
@@ -39,10 +40,10 @@ describe.skipIf(!integrationTestsEnabled)('local-only PostgreSQL-to-Compose asso
       clonePort = await reserveEphemeralPort();
     }
     originalUrl = createDatabaseUrl(originalPort);
-    originalDependencies = createDockerDependencies(originalProject);
+    originalDependencies = createDockerDependencies(originalProject, originalPort);
 
-    startComposeProject(originalProject, originalPort);
-    startComposeProject(cloneProject, clonePort);
+    startComposeProject(originalProject, originalPort, startedProjects);
+    startComposeProject(cloneProject, clonePort, startedProjects);
     await waitForPostgres(originalProject, originalPort);
     await waitForPostgres(cloneProject, clonePort);
 
@@ -62,9 +63,22 @@ describe.skipIf(!integrationTestsEnabled)('local-only PostgreSQL-to-Compose asso
   }, 90_000);
 
   afterAll(async () => {
-    await Promise.all([originalPrisma?.$disconnect(), clonePrisma?.$disconnect()]);
-    stopComposeProject(cloneProject);
-    stopComposeProject(originalProject);
+    const disconnectResults = await Promise.allSettled([
+      originalPrisma?.$disconnect(),
+      clonePrisma?.$disconnect(),
+    ]);
+    const cleanupResults = await Promise.allSettled(
+      [...startedProjects].reverse().map((project) => stopComposeProject(project)),
+    );
+    const failures = [...disconnectResults, ...cleanupResults].filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    if (failures.length > 0) {
+      throw new AggregateError(
+        failures.map(({ reason }) => reason),
+        'Could not clean up all temporary PostgreSQL Compose fixtures.',
+      );
+    }
   }, 90_000);
 
   it('accepts the effective connection to the authorized temporary Compose service', () => {
@@ -132,7 +146,7 @@ function createPrismaClient(databaseUrl: string): PrismaClient {
   });
 }
 
-function createDockerDependencies(project: string): LocalOnlyDockerDependencies {
+function createDockerDependencies(project: string, port: number): LocalOnlyDockerDependencies {
   return {
     composeFile,
     composeProject: project,
@@ -142,12 +156,31 @@ function createDockerDependencies(project: string): LocalOnlyDockerDependencies 
         return execFileSync('docker', args, {
           cwd,
           encoding: 'utf8',
-          stdio: ['ignore', 'pipe', 'ignore'],
+          stdio: ['ignore', 'pipe', 'pipe'],
           timeout: 20_000,
-          env: process.env,
+          env: {
+            ...process.env,
+            POSTGRES_DB: postgresDatabase,
+            POSTGRES_USER: postgresUser,
+            POSTGRES_PASSWORD: postgresPassword,
+            POSTGRES_PORT: String(port),
+          },
         }).trim();
-      } catch {
-        throw new Error('Docker Compose integration fixture command failed.');
+      } catch (error) {
+        const commandError = error as NodeJS.ErrnoException & {
+          status?: number | null;
+          stderr?: Buffer | string;
+        };
+        const stderr = Buffer.isBuffer(commandError.stderr)
+          ? commandError.stderr.toString('utf8')
+          : commandError.stderr;
+        const safeStderr = stderr?.replaceAll(postgresPassword, '[REDACTED]').trim();
+        const exitStatus = commandError.status ?? commandError.code ?? 'unknown';
+        throw new Error(
+          [`Docker command failed (exit ${exitStatus}): docker ${args.join(' ')}`, safeStderr]
+            .filter(Boolean)
+            .join('\n'),
+        );
       }
     },
   };
@@ -173,7 +206,8 @@ function composeCommand(project: string, port: number, args: string[]): string {
   ).trim();
 }
 
-function startComposeProject(project: string, port: number): void {
+function startComposeProject(project: string, port: number, startedProjects: Set<string>): void {
+  startedProjects.add(project);
   composeCommand(project, port, ['up', '--detach', 'postgres']);
 }
 
