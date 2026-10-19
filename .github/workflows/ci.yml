@@ -17,6 +17,8 @@ jobs:
   validate:
     name: Validate workspace
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/garquinsfilm?schema=public
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -34,6 +36,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Validate Prisma schema
+        run: pnpm --filter @garquinsfilm/api prisma:validate
+
+      - name: Generate Prisma Client
+        run: pnpm --filter @garquinsfilm/api prisma:generate
 
       - name: Lint
         run: pnpm lint
