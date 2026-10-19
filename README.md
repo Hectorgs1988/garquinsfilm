@@ -77,7 +77,7 @@ Para una futura conexión de `apps/api` con Prisma, utiliza el host loopback, el
 postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@127.0.0.1:<POSTGRES_PORT>/<POSTGRES_DB>?schema=public
 ```
 
-Esta URL podrá configurarse como `DATABASE_URL` en el entorno local de la API. Si la contraseña contiene caracteres reservados en una URL, deben codificarse según URL encoding.
+Esta URL podrá configurarse como `DATABASE_URL` en el entorno local de la API. La línea de ejemplo de `.env.example` coincide con sus valores `POSTGRES_*`; si cambias el nombre, usuario, contraseña o puerto, actualiza también `DATABASE_URL`. Si la contraseña contiene caracteres reservados en una URL, deben codificarse según URL encoding.
 
 Para reiniciar el contenedor conservando datos:
 
@@ -92,6 +92,31 @@ docker compose down
 ```
 
 **Pérdida de datos:** `docker compose down -v` elimina también el volumen nombrado `postgres_data` y todos los datos persistidos. No ejecutes ese comando salvo que quieras borrar la base local por completo.
+
+## Prisma en la API
+
+`apps/api` utiliza Prisma ORM 7.10.1, `@prisma/client` 7.10.1 y el adaptador oficial `@prisma/adapter-pg` 7.10.1 con `pg`. Prisma 7 requiere un adaptador de driver en ejecución. La misma combinación Prisma 7/PostgreSQL aparece en la documentación actual del adaptador Prisma de Better Auth; la integración de Better Auth sigue fuera de alcance y deberá validarse al implementarla.
+
+La conexión prioriza `DATABASE_URL` del fichero raíz `.env`; `.env.example` contiene un ejemplo ficticio. Si falta esa variable pero están definidas `POSTGRES_DB`, `POSTGRES_USER` y `POSTGRES_PASSWORD`, la API deriva una URL local en `127.0.0.1` con `POSTGRES_PORT` (por defecto, `5433`), codificando los componentes de la URL. Una `DATABASE_URL` explícita permite usar otro host en entornos posteriores. La API carga el fichero para los comandos pnpm de su workspace y devuelve `503 {"status":"unavailable"}` en `GET /ready` si PostgreSQL no está accesible. `GET /health` sigue comprobando únicamente que el proceso API responde.
+
+Valida el esquema y genera el cliente:
+
+```bash
+corepack pnpm --filter @garquinsfilm/api prisma:validate
+corepack pnpm --filter @garquinsfilm/api prisma:generate
+```
+
+La generación también se invoca desde los scripts `dev`, `typecheck`, `test` y `build`; el cliente se escribe en `apps/api/src/generated` y no se versiona. CI valida y genera explícitamente después de una instalación limpia, antes de typecheck/tests/build. No depende de artefactos generados en un checkout local.
+
+La base del esquema Prisma solo declara el proveedor y el generador: todavía no hay modelos funcionales ni migraciones. Cuando se incorporen modelos, crear y revisar migraciones versionadas con `corepack pnpm --filter @garquinsfilm/api db:migrate`; para aplicar migraciones ya versionadas en un entorno se usará `db:migrate:deploy`. No usar `prisma db push` como sustituto. No ejecutar migraciones en una base compartida sin revisión.
+
+Los tests unitarios de `/ready` simulan los estados disponible y no disponible y se ejecutan sin una base real. La prueba de integración de solo lectura a PostgreSQL está desactivada por defecto; para ejecutarla explícitamente con la base local healthy y `DATABASE_URL` configurada:
+
+```bash
+RUN_DB_INTEGRATION_TESTS=1 corepack pnpm --filter @garquinsfilm/api test
+```
+
+La prueba solo realiza `SELECT 1`; no crea tablas ni modifica datos.
 
 ## Estructura
 
