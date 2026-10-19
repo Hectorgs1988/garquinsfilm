@@ -9,7 +9,9 @@
     "start": "node dist/server.js",
     "typecheck": "pnpm prisma:generate && tsc --noEmit",
     "test": "pnpm prisma:generate && vitest run",
-    "test:integration": "pnpm prisma:generate && RUN_AUTH_INTEGRATION_TESTS=1 vitest run src/auth/auth.integration.test.ts",
+    "test:integration": "pnpm prisma:generate && RUN_AUTH_INTEGRATION_TESTS=1 vitest run src/auth/*.integration.test.ts",
+    "auth:bootstrap-admin": "tsx src/scripts/bootstrap-admin.ts",
+    "auth:create-local-invitation": "tsx src/scripts/create-local-invitation.ts",
     "auth:schema:generate": "auth generate --config src/auth/auth.ts --adapter prisma --dialect postgresql --output prisma/schema.prisma --yes",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
@@ -19,6 +21,7 @@
   "dependencies": {
     "@better-auth/prisma-adapter": "1.7.11",
     "@fastify/cors": "11.3.1",
+    "@fastify/rate-limit": "11.2.1",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "better-auth": "1.7.11",

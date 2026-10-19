@@ -1,12 +1,13 @@
 # Modelo de datos lógico — propuesta
 
-> Modelo conceptual; no es el esquema Prisma definitivo. PostgreSQL y Prisma están aprobados. El core de Better Auth ya cuenta con esquema/migración Prisma versionados; invitaciones y modelos de negocio siguen fuera de esa migración.
+> Modelo conceptual; PostgreSQL y Prisma están aprobados. Los modelos de autenticación e invitación están versionados en Prisma; los modelos de negocio siguen fuera de las migraciones actuales.
 
-- **User:** identidad gestionada por Better Auth. Incluirá un rol global `admin|user`, asignado exclusivamente por lógica de servidor. El alta normal se produce mediante invitación aceptada; el primer administrador se crea con un procedimiento local controlado.
+- **User:** identidad gestionada por Better Auth. El rol global usa el enum `GlobalRole` (`admin|user`) y solo se asigna en servidor. El alta normal ocurre al aceptar una invitación; el primer administrador se crea mediante el comando local controlado.
 - **Session:** sesiones gestionadas por Better Auth y relacionadas con User; proteger tokens y metadatos sensibles.
 - **Account:** métodos de autenticación gestionados por Better Auth y relacionados con User. No duplicar credenciales ni almacenar contraseñas en modelos propios.
 - **Verification:** registros de verificación gestionados por Better Auth para los flujos habilitados. No exigir verificación adicional del email después de aceptar una invitación válida.
-- **Invitation:** id, email normalizado, token_hash, expires_at (7 días desde su emisión), invited_by (administrador), accepted_at? y, si hace falta para integridad/auditoría, user_id aceptante. El token de alta entropía se almacena solo como hash; aceptación única, atómica y protegida ante concurrencia. Solo `admin` puede emitir invitaciones.
+- **Invitation (implementado):** id, email normalizado, `tokenHash`, `status`, `expiresAt`, `createdByUserId`, `consumedAt`, `consumedUserId` y `revokedAt`. `status` recorre `PENDING_DELIVERY → ACTIVE → CONSUMED`, con estados terminales `DELIVERY_FAILED` y `REVOKED`. Solo se persiste SHA-256 de un token aleatorio de 32 bytes; caduca a los 7 días. Solo `admin` puede emitir, listar y revocar; la aceptación exige estado `ACTIVE` y crea usuario/cuenta credential en una transacción atómica.
+- **AuditEvent (implementado):** acción, actor opcional, id de objetivo opcional y fecha; no contiene token, contraseña ni correo de invitación.
 - **Media:** id, provider=`tmdb`, external_id, type=`movie|tv`, metadata cache?, updated_at. **Unique(provider, type, external_id)**.
 - **LibraryEntry:** id, user_id, media_id, status, is_favorite, added_at, watched_at?, updated_at. **Unique(user_id, media_id)**.
 - **Rating:** library_entry_id único, score (decimal(3,1)), comment?, updated_at. La valoración pertenece a una entrada de biblioteca; score entre 0,0 y 10,0 en incrementos de 0,1.
@@ -19,7 +20,9 @@
 
 - Better Auth gestiona identidad, sesiones, cuentas de autenticación y verificaciones.
 - Los roles globales solo se asignan en el servidor; nunca se aceptan como autoridad desde el cliente.
-- La aceptación de invitación comprueba email normalizado, hash, caducidad y estado no consumido; la escritura debe impedir atómicamente el uso concurrente.
+- La base de datos restringe los roles globales mediante `GlobalRole`; el propietario/rol de miembro en una lista es independiente.
+- La aceptación de invitación comprueba email normalizado, hash, caducidad y estado `ACTIVE`; la transición a `CONSUMED` y la creación de usuario/cuenta son atómicas y excluyen consumo concurrente.
+- Una invitación solo pasa de `PENDING_DELIVERY` a `ACTIVE` después de que el adaptador confirme su procesamiento. Si el resultado de persistencia de activación es ambiguo, inspeccionar el estado tras recuperar DB: `ACTIVE` conserva el token entregado; cualquier estado no activo se revoca antes de emitir un token nuevo.
 - La propiedad/rol de miembro en una lista no confiere ni requiere un rol global concreto.
 - El estado depende del tipo de medio. Película: `pending|watched`; serie: `pending|watching|completed|dropped`.
 - Una valoración solo puede existir para un título presente en la biblioteca personal; su unicidad se deriva de la entrada única por usuario y medio.
