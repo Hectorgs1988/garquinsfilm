@@ -4,6 +4,7 @@ import rateLimit from '@fastify/rate-limit';
 import { getAuthConfig } from './auth/config.js';
 import invitationRoutes from './auth/invitation-routes.js';
 import type { InvitationDelivery } from './auth/invitations.service.js';
+import type { AuthRuntime } from './auth/auth.js';
 import authRoutes from './auth/routes.js';
 import { getDatabase } from './db/client.js';
 import type { DatabaseHealth } from './db/database.js';
@@ -12,6 +13,7 @@ import healthRoute from './routes/health.js';
 interface BuildAppOptions {
   database?: DatabaseHealth;
   invitationDelivery?: InvitationDelivery;
+  auth?: AuthRuntime;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -29,8 +31,11 @@ export function buildApp(options: BuildAppOptions = {}) {
     global: false,
     keyGenerator: (request) => request.ip,
   });
-  app.register(authRoutes);
-  app.register(invitationRoutes, { delivery: options.invitationDelivery });
+  app.register(authRoutes, { auth: options.auth });
+  app.register(invitationRoutes, {
+    auth: options.auth,
+    delivery: options.invitationDelivery,
+  });
   app.register(healthRoute, { database });
   app.addHook('onClose', async () => {
     await database.disconnect();

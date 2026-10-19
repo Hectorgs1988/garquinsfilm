@@ -16,8 +16,8 @@ Descubrir títulos, guardar lo que se quiere ver, registrar lo ya visto y compar
 - Después de aceptar una invitación válida no se exige verificación adicional del correo.
 - Roles globales: `admin` y `user`. La asignación de roles se realiza exclusivamente en el servidor. La propiedad de una lista compartida es independiente del rol global.
 - El primer administrador se crea mediante un procedimiento local controlado, nunca a través de un endpoint público.
-- El core incluye inicio/cierre de sesión y sesiones/cookies seguras. Recuperación de contraseña y entrega real de invitaciones por correo siguen pendientes. No se desactivan CSRF ni comprobaciones de origen y se limitan intentos en endpoints de autenticación.
-- Desarrollo local: Mailpit con Docker. Las pruebas automatizadas utilizan un remitente simulado, sin envío real. No hay proveedor de correo remoto aprobado.
+- El core incluye inicio/cierre de sesión, sesiones/cookies seguras, invitaciones y recuperación de contraseña. Los correos se envían mediante SMTP configurable; localmente se capturan con Mailpit. Un remitente SMTP que acepte el destinatario no garantiza recepción final. No se desactivan CSRF ni comprobaciones de origen y se limitan intentos en endpoints de autenticación.
+- Las pruebas automatizadas usan un remitente simulado, sin envío real. No hay proveedor de correo remoto aprobado; Mailpit es solo desarrollo y no se puede usar en producción.
 - Alias visible y avatar opcional; perfil propio y cierre de sesión.
 - La biblioteca, valoraciones, progreso y favoritos son independientes y privados por usuario.
 - Los propietarios de listas controlan los miembros; la autorización se aplica en el backend.

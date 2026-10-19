@@ -1,6 +1,6 @@
 # GarquinsFilm
 
-Monorepositorio pnpm para la aplicación web y la API de GarquinsFilm. La API incluye autenticación base con Better Auth; no implementa todavía invitaciones ni funcionalidades de biblioteca/catálogo.
+Monorepositorio pnpm para la aplicación web y la API de GarquinsFilm. La API usa Better Auth para autenticación, invitaciones y recuperación de contraseña; las funcionalidades de biblioteca/catálogo siguen pendientes.
 
 ## Requisitos
 
@@ -55,17 +55,88 @@ docker compose ps
 
 El servicio solo publica el puerto en `127.0.0.1`. Sus valores configurables son:
 
-| Variable                      | Descripción                                   | Valor de ejemplo                              |
-| ----------------------------- | --------------------------------------------- | --------------------------------------------- |
-| `POSTGRES_DB`                 | Base de datos inicial                         | `garquinsfilm`                                |
-| `POSTGRES_USER`               | Usuario inicial                               | `garquinsfilm`                                |
-| `POSTGRES_PASSWORD`           | Contraseña local de ejemplo                   | `garquinsfilm_local_only`                     |
-| `POSTGRES_PORT`               | Puerto publicado en la máquina local          | `5433`                                        |
-| `BETTER_AUTH_SECRET`          | Secreto de sesión; genera uno localmente      | No usar el placeholder                        |
-| `BETTER_AUTH_URL`             | Origen explícito de la API                    | `http://127.0.0.1:3001`                       |
-| `BETTER_AUTH_TRUSTED_ORIGINS` | Orígenes web autorizados, separados por comas | `http://127.0.0.1:5173,http://localhost:5173` |
+| Variable                      | Descripción                                    | Valor de ejemplo                              |
+| ----------------------------- | ---------------------------------------------- | --------------------------------------------- |
+| `POSTGRES_DB`                 | Base de datos inicial                          | `garquinsfilm`                                |
+| `POSTGRES_USER`               | Usuario inicial                                | `garquinsfilm`                                |
+| `POSTGRES_PASSWORD`           | Contraseña local de ejemplo                    | `garquinsfilm_local_only`                     |
+| `POSTGRES_PORT`               | Puerto publicado en la máquina local           | `5433`                                        |
+| `BETTER_AUTH_SECRET`          | Secreto de sesión; genera uno localmente       | No usar el placeholder                        |
+| `BETTER_AUTH_URL`             | Origen explícito de la API                     | `http://127.0.0.1:3001`                       |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | Orígenes web autorizados, separados por comas  | `http://127.0.0.1:5173,http://localhost:5173` |
+| `WEB_APP_URL`                 | Origen confiable para enlaces de correo        | `http://127.0.0.1:5173`                       |
+| `SMTP_HOST`                   | Host SMTP local                                | `127.0.0.1`                                   |
+| `SMTP_PORT`                   | Puerto SMTP local                              | `1025`                                        |
+| `SMTP_SECURE`                 | TLS implícito de SMTP                          | `false`                                       |
+| `SMTP_USER` / `SMTP_PASSWORD` | Credenciales SMTP opcionales (ambas o ninguna) | Vacías para Mailpit                           |
+| `EMAIL_FROM`                  | Remitente ficticio de desarrollo               | `no-reply@garquinsfilm.local`                 |
 
 Los valores de `.env.example` son exclusivamente ejemplos de desarrollo; cambia la contraseña local antes de usar la base. `.env` está excluido de Git. La imagen aplica estas variables al inicializar un directorio de datos vacío; cambiarlas después no modifica usuarios o contraseñas ya inicializados en el volumen.
+
+## Mailpit local
+
+Mailpit captura mensajes de prueba en la máquina local y no los envía a Internet. La imagen oficial `axllent/mailpit:v1.31.6` queda fijada en Compose. La interfaz web y SMTP se publican exclusivamente en `127.0.0.1`; sus puertos host configurables son `MAILPIT_WEB_PORT` (por defecto `8025`) y `MAILPIT_SMTP_PORT` (por defecto `1025`). No requiere credenciales SMTP para las pruebas locales. La API usa un adaptador SMTP genérico configurable por `SMTP_*`; no depende de Mailpit como proveedor en el código.
+
+Inicia el servicio, consulta su estado y abre la interfaz:
+
+```bash
+docker compose up -d mailpit
+docker compose ps mailpit
+open http://127.0.0.1:8025
+```
+
+Para verificar SMTP sin usar credenciales ni enviar a un proveedor real, envía un mensaje de prueba desde la máquina local:
+
+```bash
+python3 - <<'PY'
+import smtplib
+from email.message import EmailMessage
+
+message = EmailMessage()
+message["From"] = "prueba@garquinsfilm.local"
+message["To"] = "destinatario@garquinsfilm.local"
+message["Subject"] = "Prueba local de Mailpit"
+message.set_content("Mensaje ficticio para comprobar la captura local.")
+
+with smtplib.SMTP("127.0.0.1", 1025) as smtp:
+    smtp.send_message(message)
+PY
+```
+
+Los puertos de estos ejemplos son los valores predeterminados; si has cambiado `MAILPIT_WEB_PORT` o `MAILPIT_SMTP_PORT` en `.env`, sustituye los puertos correspondientes en los comandos. El mensaje debe aparecer en la interfaz de Mailpit. También puedes consultar los mensajes capturados mediante `curl http://127.0.0.1:8025/api/v1/messages`.
+
+Detén únicamente Mailpit sin afectar PostgreSQL:
+
+```bash
+docker compose stop mailpit
+```
+
+Mailpit es exclusivamente una herramienta de desarrollo local. No publiques sus puertos en interfaces distintas de `127.0.0.1`, no lo expongas a Internet y no lo uses como proveedor de correo real. No tiene persistencia configurada: los mensajes capturados son efímeros. En `development`, la API usa por defecto `127.0.0.1:1025`; las variables `SMTP_*` permiten cambiar el servidor y `EMAIL_FROM` el remitente ficticio. Si cambias `MAILPIT_SMTP_PORT`, actualiza también `SMTP_PORT`.
+
+El adaptador genérico considera entregado un correo únicamente cuando el servidor SMTP acepta el destinatario durante la transacción SMTP. Esto no confirma que el mensaje haya llegado a la bandeja final. La configuración de producción rechaza Mailpit y SMTP loopback; no se ha aprobado ningún proveedor remoto.
+
+### Prueba manual de invitación y recuperación
+
+Usa una API apuntando a una base de pruebas desechable y aislada, no al volumen persistente de desarrollo ni a producción. La aceptación de invitaciones y el restablecimiento funcionan mediante la API; la interfaz frontend todavía no contiene esos formularios. Usa un cliente REST local que no registre cuerpos ni enlaces con tokens:
+
+Incluye `Origin: http://127.0.0.1:5173` en las peticiones `POST`; la API conserva las comprobaciones de origen y CSRF.
+
+1. Inicia sesión con un administrador local existente mediante `POST /api/auth/sign-in/email`, con `Origin: http://127.0.0.1:5173`, y conserva su cookie de sesión solo en el cliente local.
+2. Envía `POST /api/admin/invitations` con esa cookie y el cuerpo `{"email":"destinatario@garquinsfilm.local"}`. La respuesta no contiene el token. Abre <http://127.0.0.1:8025> y encuentra el mensaje.
+3. La invitación dura 7 días. Su URL coloca `email` y `token` en el fragmento `#` del enlace, por lo que el navegador no los transmite automáticamente al servidor. Mientras no exista formulario frontend, extrae los valores desde Mailpit y llama una sola vez a `POST /api/invitations/accept` con `email`, `name`, `password` y `token`. El rol lo asigna el servidor.
+4. Solicita recuperación mediante `POST /api/auth/request-password-reset` con `{"email":"destinatario@garquinsfilm.local"}`. La respuesta es genérica tanto si existe la cuenta como si no. Abre el nuevo mensaje en Mailpit; el enlace expira en una hora y contiene el token solo en el fragmento.
+5. Envía `POST /api/auth/reset-password` con `{"token":"<token del fragmento>","newPassword":"<nueva contraseña>"}`. Comprueba que el inicio de sesión con la nueva contraseña funciona, que las sesiones anteriores quedan invalidadas y que repetir el token se rechaza.
+
+Si SMTP acepta una invitación pero PostgreSQL falla antes de confirmar su activación, la API devuelve un error controlado y la invitación no se puede aceptar, salvo que la activación ya hubiera quedado confirmada y solo se perdiera la respuesta. No hay reintentos automáticos, colas ni regeneración automática. Cuando PostgreSQL vuelva a estar disponible, consulta `GET /api/admin/invitations` con la sesión de administrador. Si la invitación figura `ACTIVE`, su activación quedó confirmada y el destinatario puede usar el enlace enviado mientras no haya caducado ni se haya consumido/revocado. Si figura `PENDING_DELIVERY` o `DELIVERY_FAILED`, revócala con `DELETE /api/admin/invitations/{id}` y crea una invitación nueva con `POST /api/admin/invitations`. Nunca reactives ni reutilices el token del envío anterior. La administración visual de invitaciones pendientes o fallidas aún no está implementada.
+
+No pegues tokens en tickets, logs, repositorios ni historial de shell. Las pruebas automatizadas usan un remitente simulado; no requieren Mailpit ni envían correo real. Con Mailpit activo, ejecuta la prueba SMTP local con:
+
+```bash
+NODE_ENV=development \
+SMTP_HOST=127.0.0.1 SMTP_PORT=1025 SMTP_SECURE=false \
+EMAIL_FROM='GarquinsFilm <no-reply@garquinsfilm.local>' \
+corepack pnpm --filter @garquinsfilm/api test:mailpit
+```
 
 Comprueba el healthcheck y ejecuta una consulta:
 
@@ -115,7 +186,7 @@ La generación también se invoca desde los scripts `dev`, `typecheck`, `test` y
 
 El esquema Prisma contiene las entidades de Better Auth (`User`, `Session`, `Account`, `Verification`), el enum `GlobalRole` (`admin|user`), `Invitation` y `AuditEvent`; todavía no contiene modelos funcionales de catálogo. Las migraciones versionadas se prueban en PostgreSQL efímero aislado. CI levanta su propio PostgreSQL 17 para aplicar todas las migraciones y ejecutar tests de auth/invitaciones. No se aplican estas migraciones al volumen local automáticamente. No usar `prisma db push` como sustituto de migraciones versionadas.
 
-Better Auth acepta login por email/contraseña, consulta de sesión en `GET /api/auth/get-session` y cierre de sesión en `POST /api/auth/sign-out`. El registro público `POST /api/auth/sign-up/email` sigue deshabilitado. `POST /api/admin/invitations`, `GET /api/admin/invitations` y `DELETE /api/admin/invitations/:id` requieren sesión y rol `admin`; `POST /api/invitations/accept` crea únicamente usuarios `user` si token, email normalizado, vigencia y uso único son válidos. El consumo y la creación User/Account son atómicos. El endpoint administrativo no devuelve tokens. Las invitaciones pasan por `PENDING_DELIVERY` y solo se activan tras la confirmación durable del adaptador; hasta integrar correo, el adaptador runtime falla de forma segura y las invitaciones de prueba se crean desde el comando local documentado abajo. El endpoint protegido `GET /api/me` devuelve `401` sin sesión. Las cookies son HttpOnly y SameSite=Lax; Secure se activa en producción HTTPS. Se mantienen las comprobaciones de origen/CSRF. Better Auth limita login y el plugin Fastify limita las operaciones de invitación; no se confían headers `X-Forwarded-*`.
+Better Auth acepta login por email/contraseña, consulta de sesión en `GET /api/auth/get-session` y cierre de sesión en `POST /api/auth/sign-out`. El registro público `POST /api/auth/sign-up/email` sigue deshabilitado. `POST /api/admin/invitations`, `GET /api/admin/invitations` y `DELETE /api/admin/invitations/:id` requieren sesión y rol `admin`; `POST /api/invitations/accept` crea únicamente usuarios `user` si token, email normalizado, vigencia y uso único son válidos. El consumo y la creación User/Account son atómicos. El endpoint administrativo no devuelve tokens. Las invitaciones pasan por `PENDING_DELIVERY` y solo se activan si SMTP acepta el destinatario; esto no implica recepción final. Un fallo de envío las vuelve inutilizables (`DELIVERY_FAILED`) y una activación no persistida mantiene el estado inactivo. Better Auth provee solicitud y restablecimiento con token de una hora y un solo uso; las respuestas de solicitud son genéricas y el cambio invalida sesiones previas. El endpoint protegido `GET /api/me` devuelve `401` sin sesión. Las cookies son HttpOnly y SameSite=Lax; Secure se activa en producción HTTPS. Se mantienen las comprobaciones de origen/CSRF. Better Auth limita login y recuperación y el plugin Fastify limita las operaciones de invitación; no se confían headers `X-Forwarded-*`.
 
 Los comandos administrativos locales solo operan sobre el servicio `postgres` del [compose.yaml](./compose.yaml). Requieren `NODE_ENV=development`, un destino exacto en `LOCAL_AUTH_ALLOWED_DATABASES`, Docker Compose local y exactamente un contenedor activo con las etiquetas del proyecto/servicio esperados. Antes de escribir, el CLI compara la IP/puerto PostgreSQL observados por la conexión Prisma con la IP interna y puerto del contenedor inspeccionado, y verifica que el puerto publicado sea el de la URL autorizada. El CLI repite la comprobación tras la confirmación y justo antes de escribir. Cualquier error, ambigüedad, contexto Docker remoto, redirección o discrepancia aborta sin escribir. Cada ejecución exige teclear un nonce de un solo uso vinculado a la operación, destino y contenedor. No existe endpoint HTTP de bootstrap. Estos comandos no son un procedimiento para staging o producción.
 
@@ -142,7 +213,7 @@ LOCAL_INVITATION_EMAIL='<correo-destinatario>' \
 corepack pnpm --filter @garquinsfilm/api auth:create-local-invitation
 ```
 
-El token solo se almacena en base de datos como hash. La salida del comando es una credencial de prueba: no la copies a logs, tickets o repositorios. El mecanismo de entrega es una interfaz para integración posterior; no se envía correo en esta tarea. Si la respuesta de commit de activación se pierde, al recuperar PostgreSQL inspecciona el estado: si es `ACTIVE`, el token entregado sigue siendo válido; si es `PENDING_DELIVERY` o `DELIVERY_FAILED`, revoca la invitación y emite otra con token nuevo. No se reintenta ni recupera el token anterior.
+El token de invitación solo se almacena en base de datos como hash. Este comando CLI de pruebas muestra un token local una sola vez; no lo copies a logs, tickets o repositorios. El envío ordinario se realiza por el adaptador SMTP, que no devuelve el token en la respuesta HTTP. Si SMTP aceptó el correo pero la activación falla o su confirmación se pierde, la API devuelve un error controlado. Cuando PostgreSQL vuelva a estar disponible, sigue el procedimiento manual indicado arriba: conserva el envío solo si el estado es `ACTIVE`; si permanece `PENDING_DELIVERY` o `DELIVERY_FAILED`, revoca la invitación y emite otra. No hay reintentos automáticos y el token anterior nunca se reactiva ni reutiliza.
 
 No ejecutes migraciones ni tests de autenticación contra el volumen persistente de desarrollo. Para pruebas locales usa una instancia/base desechable con nombre terminado en `_test` y conexión loopback. Las pruebas de integración requieren `AUTH_TEST_DATABASE_URL` y `RUN_AUTH_INTEGRATION_TESTS=1`; setup rechaza una URL que no sea loopback o una base cuyo nombre no termine en `_test`. CI provisiona su propia base PostgreSQL efímera. `pnpm test` ejecuta tests unitarios e integración cuando se establece esa configuración; el script `test:integration` ejecuta los tests de autenticación e invitaciones.
 

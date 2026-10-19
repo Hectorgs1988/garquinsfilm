@@ -5,6 +5,9 @@ import { buildApp } from '../app.js';
 import { InvitationStatus, Prisma, type PrismaClient } from '../generated/prisma/client.js';
 import { AdminAlreadyBootstrappedError, bootstrapFirstAdmin } from './bootstrap.service.js';
 import { createAuthOptions } from './auth.js';
+import { getAuthConfig } from './config.js';
+import { createInvitationEmailDelivery } from '../email/email.service.js';
+import { FakeEmailSender } from '../test/fake-email-sender.js';
 import {
   acceptInvitation,
   createInvitation,
@@ -23,11 +26,17 @@ const regularEmail = `auth-invite-user-${Date.now()}@example.test`;
 describe.skipIf(!integrationTestsEnabled)('invitation and bootstrap PostgreSQL integration', () => {
   const prisma = getPrismaClient();
   const deliveredTokens = new Map<string, string>();
+  const emailSender = new FakeEmailSender();
+  const invitationEmailDelivery = createInvitationEmailDelivery(
+    emailSender,
+    getAuthConfig().webAppURL,
+  );
   const createdUserIds: string[] = [];
   const app = buildApp({
     invitationDelivery: {
       async deliver(invitation) {
         deliveredTokens.set(invitation.id, invitation.token);
+        await invitationEmailDelivery.deliver(invitation);
       },
     },
   });
@@ -185,6 +194,11 @@ describe.skipIf(!integrationTestsEnabled)('invitation and bootstrap PostgreSQL i
     const token = deliveredTokens.get(invitation.id)!;
     expect(invitation.tokenHash).toBe(hashInvitationToken(token));
     expect(invitation.tokenHash).not.toBe(token);
+    const invitationMessage = emailSender.messages.at(-1)!;
+    const invitationURL = new URL(invitationMessage.text.match(/https?:\/\/\S+/)![0]);
+    expect(invitationURL.search).toBe('');
+    expect(new URLSearchParams(invitationURL.hash.slice(1)).get('token')).toBe(token);
+    expect(response.body).not.toContain(token);
     expect(invitation.expiresAt.getTime() - invitation.createdAt.getTime()).toBeGreaterThan(
       7 * 24 * 60 * 60 * 1000 - 1000,
     );
