@@ -3,8 +3,8 @@
 ## Fase 0 — Base documental y validación
 
 - Registrar stack y reglas funcionales aprobadas en ADR y documentos de producto.
-- Validar compatibilidad de versiones de Better Auth con Fastify y Prisma antes de integrar la autenticación.
-- Acordar proveedor/canal de correo antes de habilitar invitaciones y recuperación por email.
+- Mantener como gate la validación en ejecución de las versiones exactas de Better Auth, su adaptador Prisma y el puente HTTP Fastify.
+- Mailpit con Docker está aprobado para desarrollo local; las pruebas automatizadas usarán un remitente simulado. No se ha aprobado un proveedor remoto.
 - Verificar condiciones de TMDB para uso, atribución, imágenes y caché.
 - Mantener hosting, staging/producción, identidad visual y criterios de rankings de series como pendientes.
 
@@ -15,10 +15,23 @@
 - Monorepo pnpm con `apps/web`, `apps/api` y `packages/shared`.
 - CI básico con GitHub Actions, pruebas Vitest/Playwright y checks de tipos/build.
 - PostgreSQL local con Docker y migraciones Prisma reproducibles.
-- Integración Better Auth tras completar la validación de compatibilidad.
-- Cuentas individuales, invitaciones, recuperación y pruebas de aislamiento; el envío de correo depende de aprobar proveedor.
+- Integración Better Auth tras validar versiones exactas y el puente HTTP Fastify en ejecución.
+- Invitaciones de administrador (email normalizado, 7 días, un solo uso atómico), roles globales `admin|user`, procedimiento local controlado para bootstrap del primer administrador y separación entre rol global y propiedad de listas.
+- Recuperación, sesiones/cookies seguras, límites de intentos y pruebas de aislamiento. No exigir verificación adicional del email tras invitación válida.
+- Mailpit local y remitente simulado en pruebas; sin proveedor de correo remoto aprobado.
 
 **Demo:** dos usuarios autenticados mantienen sus datos aislados.
+
+### Desglose de AUTH-001
+
+1. Validar en ejecución las versiones exactas de Better Auth, adaptador Prisma y puente HTTP Fastify con el singleton Prisma actual. Es el gate previo a integrar.
+2. Generar y revisar el esquema de User, Session, Account y Verification, rol global y sus migraciones Prisma versionadas.
+3. Implementar el montaje Fastify y configurar sesiones/cookies, origen/CORS y CSRF sin desactivar protecciones; limitar intentos.
+4. Cerrar registro público e implementar emisión administrativa y aceptación de invitaciones vinculadas a email normalizado, con hash, caducidad de 7 días y consumo atómico de un solo uso.
+5. Implementar recuperación y cierre de sesión, con respuestas anti-enumeración.
+6. Implementar procedimiento local controlado para bootstrap del primer administrador; nunca exponer endpoint público de bootstrap.
+7. Integrar Mailpit para desarrollo manual y un remitente simulado para tests; no enviar correo real desde pruebas.
+8. Ejecutar pruebas integrales de seguridad, concurrencia, cookies, origen, aislamiento y CI; documentar el flujo operativo.
 
 ## Fase 2 — Catálogo, biblioteca y valoraciones
 

@@ -15,7 +15,7 @@ Este documento distingue decisiones aprobadas de cuestiones todavía pendientes.
 - **PROD-009:** Los re-visionados quedan fuera del MVP; se mantiene una entrada por título y usuario.
 - **PROD-010:** No se filtran títulos por suscripciones a servicios de streaming.
 - **PROD-011:** TMDB es la fuente externa de películas y series. Los rankings no se presentan como rankings oficiales de FilmAffinity.
-- **PROD-012:** El registro es mediante invitación; se incluyen recuperación de contraseña y sesiones seguras. El proveedor/canal de correo sigue pendiente.
+- **PROD-012:** El registro es mediante invitación; se incluyen recuperación de contraseña y sesiones seguras. Mailpit está aprobado para desarrollo local y los tests usan remitente simulado; un proveedor de correo remoto sigue pendiente.
 
 ## ADR-001 — Base de datos y desarrollo local
 
@@ -41,15 +41,22 @@ Las versiones concretas se fijarán durante el bootstrap atendiendo a compatibil
 
 ## ADR-003 — Autenticación y correo
 
-**Estado: PARCIALMENTE APROBADO**
+**Estado: PARCIALMENTE APROBADO — decisiones funcionales y de seguridad aprobadas; validación de ejecución pendiente**
 
-- Better Auth es la solución elegida para email/contraseña y sesiones.
-- La integración queda condicionada a validar la compatibilidad de las versiones elegidas de Better Auth, Fastify y Prisma antes de incorporar dependencias.
-- El flujo de registro requiere invitación; también se requiere recuperación de contraseña.
-- **PENDIENTE:** proveedor/canal de correo para invitaciones y recuperación.
-- **PENDIENTE:** detalles de configuración que dependan de la validación de compatibilidad de Better Auth.
+- Better Auth será la solución de autenticación para email/contraseña y sesiones, pendiente de validación efectiva en ejecución.
+- El registro público estará deshabilitado. Solo se crearán cuentas mediante una invitación válida.
+- Solo los administradores pueden emitir invitaciones. Cada invitación se vincula a un email normalizado, expira a los 7 días y solo puede aceptarse una vez.
+- El token de invitación será aleatorio y de alta entropía; se almacenará únicamente su hash. La aceptación será atómica y estará protegida frente a solicitudes concurrentes.
+- Tras aceptar correctamente una invitación no se exigirá una verificación adicional del correo.
+- Habrá dos roles globales: `admin` y `user`. Los roles serán asignados y autorizados exclusivamente en el servidor, nunca desde parámetros del navegador.
+- La propiedad de una lista compartida es independiente del rol global. Los permisos de propietario de lista no se derivan de ser `admin`.
+- El primer administrador se creará mediante un procedimiento local controlado, nunca mediante un endpoint público.
+- Para desarrollo local se utilizará Mailpit con Docker. Las pruebas automatizadas usarán un remitente simulado y no enviarán correos reales.
+- No se desactivarán las protecciones CSRF ni las comprobaciones de origen. Se protegerán sesiones y cookies, se limitarán intentos en endpoints de autenticación y no se registrarán tokens, contraseñas ni cookies.
+- No se incluirán credenciales reales en archivos versionados.
+- **PENDIENTE:** validar en ejecución las versiones exactas de Better Auth, su adaptador Prisma y el puente HTTP para Fastify con las versiones instaladas de Fastify y Prisma. El informe documental de AUTH-COMPAT-001 no sustituye esta validación.
 
-No implementar autenticación propia como sustituto sin aprobación.
+No implementar autenticación propia como sustituto ni alterar las decisiones aprobadas sin autorización.
 
 ## ADR-004 — Infraestructura y despliegue
 

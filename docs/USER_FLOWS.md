@@ -2,7 +2,10 @@
 
 | ID | Flujo | Resultado observable |
 |---|---|---|
-| F01 | Invitación → registro con email/contraseña → login → inicio | Sesión autenticada mediante Better Auth, tras validar compatibilidad; perfil propio |
+| F01 | Administrador emite invitación → destinatario acepta dentro de 7 días → crea cuenta con email/contraseña → inicio | Invitación ligada al email normalizado, consumida atómicamente una vez; sesión autenticada mediante Better Auth tras validar la integración; perfil propio con rol `user` asignado por servidor y sin verificación adicional de email |
+| F01A | Intentar registro público, aceptar invitación vencida/usada o emitir invitación sin ser administrador | Operación rechazada; no se crea cuenta ni se revela información sensible |
+| F01B | Procedimiento local controlado crea primer administrador | Cuenta inicial con rol `admin`; no existe endpoint público de bootstrap |
+| F01C | Login → logout | Inicio de sesión limitado por rate limiting; cierre invalida la sesión y elimina la cookie de forma segura |
 | F02 | Buscar → ficha → añadir a pendientes | Una única entrada en biblioteca |
 | F03 | Biblioteca → título guardado → marcar visto → valorar | Cambia estado; se guarda nota válida entre 0,0 y 10,0 en incrementos de 0,1 |
 | F04 | Ficha de serie → añadir a biblioteca → marcar temporada completa | Progreso propio por temporadas actualizado |
@@ -10,7 +13,7 @@
 | F06 | Lista compartida → título → guardar en biblioteca propia | Lista compartida permanece intacta |
 | F07 | Rankings → filtrar → añadir a pendientes | Título agregado sin duplicado; fuente y criterios visibles |
 | F08 | Biblioteca → ordenar por nota descendente | Ranking personal correcto |
-| F09 | Login → solicitar recuperación → seguir instrucciones por correo | Recuperación segura; depende del proveedor/canal de correo aún pendiente |
+| F09 | Login → solicitar recuperación → seguir instrucciones recibidas por correo | Recuperación segura, con respuestas que no permiten enumerar cuentas; desarrollo manual mediante Mailpit y pruebas automatizadas con remitente simulado |
 
 ## Errores y alternativas obligatorias
 
@@ -22,7 +25,10 @@
 - TMDB lento o no disponible: error recuperable sin perder datos propios.
 - Serie sin temporadas normales: el progreso no divide entre cero.
 - Nota fuera de rango o con precisión inválida: validación cliente y servidor.
-- Invitación o recuperación sin servicio de correo aprobado/configurado: el flujo no se considera operativo; no simular un envío exitoso.
+- Si el canal de correo local no está disponible/configurado, el envío de invitación o recuperación no se considera exitoso; no simular el envío real. Los tests automatizados usan un remitente simulado y no envían correo.
+- Invitación concurrente: solo una solicitud puede consumirla y crear una cuenta.
+- Intento de elevar o asignar un rol desde el navegador: ignorar o rechazar el valor; la autorización usa el rol persistido y controlado por servidor.
+- Solicitud con origen no confiable: mantener activas las comprobaciones de origen/CSRF; no aceptar una configuración permisiva para hacer pasar el flujo.
 
 ## Criterios mínimos por pantalla
 
