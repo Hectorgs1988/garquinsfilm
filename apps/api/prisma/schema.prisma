@@ -7,17 +7,33 @@ datasource db {
   provider = "postgresql"
 }
 
+enum GlobalRole {
+  admin
+  user
+}
+
+enum InvitationStatus {
+  PENDING_DELIVERY
+  ACTIVE
+  DELIVERY_FAILED
+  REVOKED
+  CONSUMED
+}
+
 model User {
-  id            String    @id
-  name          String
-  email         String
-  emailVerified Boolean   @default(false)
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  role          String    @default("user")
-  sessions      Session[]
-  accounts      Account[]
+  id                 String       @id
+  name               String
+  email              String
+  emailVerified      Boolean      @default(false)
+  image              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  role               GlobalRole   @default(user)
+  sessions           Session[]
+  accounts           Account[]
+  invitationsCreated Invitation[] @relation("InvitationCreator")
+  invitationAccepted Invitation?  @relation("InvitationConsumer")
+  auditEvents        AuditEvent[] @relation("AuditActor")
 
   @@unique([email])
   @@map("user")
@@ -69,4 +85,36 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+model Invitation {
+  id              String           @id @default(cuid())
+  email           String
+  tokenHash       String           @unique
+  status          InvitationStatus @default(PENDING_DELIVERY)
+  createdAt       DateTime         @default(now())
+  expiresAt       DateTime
+  consumedAt      DateTime?
+  revokedAt       DateTime?
+  createdByUserId String
+  consumedUserId  String?          @unique
+  createdBy       User             @relation("InvitationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  consumedUser    User?            @relation("InvitationConsumer", fields: [consumedUserId], references: [id], onDelete: SetNull)
+
+  @@index([email, expiresAt])
+  @@index([createdByUserId, createdAt])
+  @@map("invitation")
+}
+
+model AuditEvent {
+  id          String   @id @default(cuid())
+  action      String
+  actorUserId String?
+  targetId    String?
+  createdAt   DateTime @default(now())
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_event")
 }

@@ -54,7 +54,8 @@ Las versiones concretas se fijarán durante el bootstrap atendiendo a compatibil
 - Para desarrollo local se utilizará Mailpit con Docker. Las pruebas automatizadas usarán un remitente simulado y no enviarán correos reales.
 - No se desactivarán las protecciones CSRF ni las comprobaciones de origen. Se protegerán sesiones y cookies, se limitarán intentos en endpoints de autenticación y no se registrarán tokens, contraseñas ni cookies.
 - No se incluirán credenciales reales en archivos versionados.
-- **PENDIENTE:** ejecución y revisión de GitHub Actions al abrir la Pull Request. Las invitaciones, el bootstrap local del primer administrador y la recuperación de contraseña quedan para tareas posteriores. Si se cambian las versiones de Better Auth, adaptador Prisma, Fastify, Prisma o PostgreSQL, repetir las pruebas de compatibilidad antes de integrar.
+- Invitaciones y bootstrap local del primer administrador están implementados en `feature/auth-invitations`; los CLI exigen `NODE_ENV=development`, allowlist del destino e identidad PostgreSQL verificada, además de un desafío interactivo aleatorio por operación. Las invitaciones permanecen inutilizables hasta la confirmación durable de entrega y activación persistida; SMTP/Mailpit aún no están configurados. La recuperación de contraseña sigue pendiente.
+- **PENDIENTE:** ejecución y revisión de GitHub Actions al abrir la Pull Request. Si se cambian las versiones de Better Auth, adaptador Prisma, Fastify, Prisma o PostgreSQL, repetir las pruebas de compatibilidad antes de integrar.
 
 No implementar autenticación propia como sustituto ni alterar las decisiones aprobadas sin autorización.
 

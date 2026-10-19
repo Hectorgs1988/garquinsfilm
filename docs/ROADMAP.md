@@ -16,8 +16,8 @@
 - CI básico con GitHub Actions, pruebas Vitest/Playwright y checks de tipos/build.
 - PostgreSQL local con Docker y migraciones Prisma reproducibles.
 - Core Better Auth, sesiones y migración versionados; CI repite tests de integración en PostgreSQL efímero.
-- Invitaciones de administrador (email normalizado, 7 días, un solo uso atómico), roles globales `admin|user`, procedimiento local controlado para bootstrap del primer administrador y separación entre rol global y propiedad de listas.
-- Recuperación, sesiones/cookies seguras, límites de intentos y pruebas de aislamiento. No exigir verificación adicional del email tras invitación válida.
+- Invitaciones de administrador, roles globales `admin|user` y bootstrap local están implementados en `feature/auth-invitations`; falta ejecutar/revisar la CI de PR. La interfaz de entrega existe, pero el proveedor/canal de correo no se implementa en esta tarea.
+- Recuperación de contraseña, correo local mediante Mailpit, sesiones/cookies seguras, límites de intentos y pruebas de aislamiento. No exigir verificación adicional del email tras invitación válida.
 - Mailpit local y remitente simulado en pruebas; sin proveedor de correo remoto aprobado.
 
 **Demo:** dos usuarios autenticados mantienen sus datos aislados.
@@ -27,9 +27,9 @@
 1. Validar Better Auth, adaptador Prisma y puente HTTP Fastify con el singleton Prisma actual. Completado localmente para las versiones fijadas; confirmar CI/revisión.
 2. Generar y revisar el esquema de User, Session, Account y Verification, rol global y migración Prisma versionada. Completado para el core.
 3. Implementar login, consulta de sesión y logout en Fastify; configurar cookies, origen/CORS y CSRF sin desactivar protecciones y limitar intentos. Completado para el core.
-4. Cerrar registro público e implementar emisión administrativa y aceptación de invitaciones vinculadas a email normalizado, con hash, caducidad de 7 días y consumo atómico de un solo uso.
+4. Cerrar registro público e implementar emisión administrativa y aceptación de invitaciones vinculadas a email normalizado, con hash, caducidad de 7 días y consumo atómico de un solo uso. Implementado localmente en AUTH-001C.1; correo real pendiente.
 5. Implementar recuperación y cierre de sesión, con respuestas anti-enumeración.
-6. Implementar procedimiento local controlado para bootstrap del primer administrador; nunca exponer endpoint público de bootstrap.
+6. Implementar procedimiento local controlado para bootstrap del primer administrador; nunca exponer endpoint público de bootstrap. Implementado en AUTH-001C.1.
 7. Integrar Mailpit para desarrollo manual y un remitente simulado para tests; no enviar correo real desde pruebas.
 8. Ejecutar pruebas integrales de seguridad, concurrencia, cookies, origen, aislamiento y CI; documentar el flujo operativo.
 

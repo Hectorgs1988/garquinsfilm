@@ -113,11 +113,38 @@ corepack pnpm --filter @garquinsfilm/api prisma:generate
 
 La generación también se invoca desde los scripts `dev`, `typecheck`, `test` y `build`; el cliente se escribe en `apps/api/src/generated` y no se versiona. CI valida y genera explícitamente después de una instalación limpia, antes de typecheck/tests/build. No depende de artefactos generados en un checkout local.
 
-El esquema Prisma contiene las entidades de Better Auth (`User`, `Session`, `Account`, `Verification`) y el rol global de usuario; no contiene todavía modelos funcionales. La migración versionada `apps/api/prisma/migrations/*_auth_core` se probó en una base PostgreSQL efímera aislada. CI levanta su propio servicio PostgreSQL 17 para aplicar migraciones y ejecutar los tests de auth. No se ha aplicado esta migración al volumen local de desarrollo. No usar `prisma db push` como sustituto de migraciones versionadas.
+El esquema Prisma contiene las entidades de Better Auth (`User`, `Session`, `Account`, `Verification`), el enum `GlobalRole` (`admin|user`), `Invitation` y `AuditEvent`; todavía no contiene modelos funcionales de catálogo. Las migraciones versionadas se prueban en PostgreSQL efímero aislado. CI levanta su propio PostgreSQL 17 para aplicar todas las migraciones y ejecutar tests de auth/invitaciones. No se aplican estas migraciones al volumen local automáticamente. No usar `prisma db push` como sustituto de migraciones versionadas.
 
-Better Auth acepta login por email/contraseña, consulta de sesión en `GET /api/auth/get-session` y cierre de sesión en `POST /api/auth/sign-out`. `POST /api/auth/sign-up/email` permanece deshabilitado hasta añadir invitaciones; el endpoint protegido de ejemplo `GET /api/me` devuelve `401` sin sesión. Las cookies son HttpOnly y SameSite=Lax; Secure se activa en producción HTTPS. Se mantienen las comprobaciones CSRF/origen y se rechazan orígenes no configurados. El rate limiting está habilitado también en desarrollo, con un límite más estricto para login y registro. No se confían headers `X-Forwarded-*`: la IP se toma de la conexión observada por Fastify.
+Better Auth acepta login por email/contraseña, consulta de sesión en `GET /api/auth/get-session` y cierre de sesión en `POST /api/auth/sign-out`. El registro público `POST /api/auth/sign-up/email` sigue deshabilitado. `POST /api/admin/invitations`, `GET /api/admin/invitations` y `DELETE /api/admin/invitations/:id` requieren sesión y rol `admin`; `POST /api/invitations/accept` crea únicamente usuarios `user` si token, email normalizado, vigencia y uso único son válidos. El consumo y la creación User/Account son atómicos. El endpoint administrativo no devuelve tokens. Las invitaciones pasan por `PENDING_DELIVERY` y solo se activan tras la confirmación durable del adaptador; hasta integrar correo, el adaptador runtime falla de forma segura y las invitaciones de prueba se crean desde el comando local documentado abajo. El endpoint protegido `GET /api/me` devuelve `401` sin sesión. Las cookies son HttpOnly y SameSite=Lax; Secure se activa en producción HTTPS. Se mantienen las comprobaciones de origen/CSRF. Better Auth limita login y el plugin Fastify limita las operaciones de invitación; no se confían headers `X-Forwarded-*`.
 
-No ejecutes migraciones ni tests de autenticación contra el volumen de desarrollo existente. Para pruebas locales, usa una base aislada con nombre terminado en `_test` y conexión loopback, o ejecuta la CI, que provisiona un servicio temporal. Las pruebas de integración requieren `AUTH_TEST_DATABASE_URL` y `RUN_AUTH_INTEGRATION_TESTS=1`; setup rechaza una URL que no sea loopback o una base cuyo nombre no termine en `_test`. `pnpm test` ejecuta los tests unitarios y añade integración cuando se establece esa configuración.
+Los comandos administrativos locales solo operan sobre el servicio `postgres` del [compose.yaml](./compose.yaml). Requieren `NODE_ENV=development`, un destino exacto en `LOCAL_AUTH_ALLOWED_DATABASES`, Docker Compose local y exactamente un contenedor activo con las etiquetas del proyecto/servicio esperados. Antes de escribir, el CLI compara la IP/puerto PostgreSQL observados por la conexión Prisma con la IP interna y puerto del contenedor inspeccionado, y verifica que el puerto publicado sea el de la URL autorizada. El CLI repite la comprobación tras la confirmación y justo antes de escribir. Cualquier error, ambigüedad, contexto Docker remoto, redirección o discrepancia aborta sin escribir. Cada ejecución exige teclear un nonce de un solo uso vinculado a la operación, destino y contenedor. No existe endpoint HTTP de bootstrap. Estos comandos no son un procedimiento para staging o producción.
+
+El primer administrador de desarrollo se crea solo desde una consola local y únicamente en el servicio Compose autorizado. Esta operación modifica la base del volumen local configurado en `compose.yaml`; verifica el destino y conserva una copia de seguridad adecuada antes de usarla. Introduce las variables mediante un gestor de secretos o el entorno de tu terminal; no guardes la contraseña en el repositorio ni en el historial del shell:
+
+```bash
+NODE_ENV=development \
+DATABASE_URL='<URL configurada para el servicio postgres local de Compose>' \
+LOCAL_AUTH_ALLOWED_DATABASES='<usuario@127.0.0.1:puerto/base?schema=public>' \
+BOOTSTRAP_ADMIN_EMAIL='<correo-admin>' \
+BOOTSTRAP_ADMIN_NAME='<nombre-admin>' \
+BOOTSTRAP_ADMIN_PASSWORD='<contraseña-admin>' \
+corepack pnpm --filter @garquinsfilm/api auth:bootstrap-admin
+```
+
+Para desarrollo local, un administrador existente puede emitir una invitación en la misma base del servicio Compose local; esto también escribe en el volumen de desarrollo y requiere confirmar cuidadosamente el destino. El token se muestra una sola vez en stdout:
+
+```bash
+NODE_ENV=development \
+DATABASE_URL='<URL configurada para el servicio postgres local de Compose>' \
+LOCAL_AUTH_ALLOWED_DATABASES='<usuario@127.0.0.1:puerto/base?schema=public>' \
+LOCAL_INVITATION_ADMIN_EMAIL='<correo-admin>' \
+LOCAL_INVITATION_EMAIL='<correo-destinatario>' \
+corepack pnpm --filter @garquinsfilm/api auth:create-local-invitation
+```
+
+El token solo se almacena en base de datos como hash. La salida del comando es una credencial de prueba: no la copies a logs, tickets o repositorios. El mecanismo de entrega es una interfaz para integración posterior; no se envía correo en esta tarea. Si la respuesta de commit de activación se pierde, al recuperar PostgreSQL inspecciona el estado: si es `ACTIVE`, el token entregado sigue siendo válido; si es `PENDING_DELIVERY` o `DELIVERY_FAILED`, revoca la invitación y emite otra con token nuevo. No se reintenta ni recupera el token anterior.
+
+No ejecutes migraciones ni tests de autenticación contra el volumen persistente de desarrollo. Para pruebas locales usa una instancia/base desechable con nombre terminado en `_test` y conexión loopback. Las pruebas de integración requieren `AUTH_TEST_DATABASE_URL` y `RUN_AUTH_INTEGRATION_TESTS=1`; setup rechaza una URL que no sea loopback o una base cuyo nombre no termine en `_test`. CI provisiona su propia base PostgreSQL efímera. `pnpm test` ejecuta tests unitarios e integración cuando se establece esa configuración; el script `test:integration` ejecuta los tests de autenticación e invitaciones.
 
 El esquema de Better Auth se puede regenerar con `corepack pnpm --filter @garquinsfilm/api auth:schema:generate`. Después de revisar los cambios del esquema, las migraciones se crean con `corepack pnpm --filter @garquinsfilm/api db:migrate`; el comando debe apuntar exclusivamente a una base aislada de pruebas durante esta tarea. No ejecutar migraciones contra bases compartidas sin revisión.
 

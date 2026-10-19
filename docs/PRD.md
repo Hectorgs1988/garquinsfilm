@@ -10,13 +10,13 @@ Descubrir títulos, guardar lo que se quiere ver, registrar lo ya visto y compar
 
 ### 1. Cuentas y perfiles
 
-- Inicio de sesión con email y contraseña y sesiones mediante Better Auth. El core de API está implementado y se probó con Better Auth/adaptador Prisma 1.7.11, Fastify 5.12.7, Prisma 7.10.1 y PostgreSQL 17 aislado; la revisión técnica y los checks CI siguen siendo parte de la integración.
+- Inicio de sesión con email y contraseña y sesiones mediante Better Auth. El core y la implementación de invitaciones/bootstrap están en la rama `feature/auth-invitations`; la ejecución de GitHub Actions para esta rama queda pendiente hasta abrir su PR.
 - El registro público está deshabilitado. Las cuentas se crean únicamente aceptando una invitación válida emitida por un administrador.
 - Cada invitación se vincula a un email normalizado, caduca a los 7 días y solo puede usarse una vez. Su token es aleatorio, de alta entropía y almacenado únicamente como hash; la aceptación es atómica frente a solicitudes concurrentes.
 - Después de aceptar una invitación válida no se exige verificación adicional del correo.
 - Roles globales: `admin` y `user`. La asignación de roles se realiza exclusivamente en el servidor. La propiedad de una lista compartida es independiente del rol global.
 - El primer administrador se crea mediante un procedimiento local controlado, nunca a través de un endpoint público.
-- Se incluye recuperación de contraseña, cierre de sesión y sesiones/cookies seguras. No se desactivan CSRF ni comprobaciones de origen y se limitan intentos en endpoints de autenticación.
+- El core incluye inicio/cierre de sesión y sesiones/cookies seguras. Recuperación de contraseña y entrega real de invitaciones por correo siguen pendientes. No se desactivan CSRF ni comprobaciones de origen y se limitan intentos en endpoints de autenticación.
 - Desarrollo local: Mailpit con Docker. Las pruebas automatizadas utilizan un remitente simulado, sin envío real. No hay proveedor de correo remoto aprobado.
 - Alias visible y avatar opcional; perfil propio y cierre de sesión.
 - La biblioteca, valoraciones, progreso y favoritos son independientes y privados por usuario.
