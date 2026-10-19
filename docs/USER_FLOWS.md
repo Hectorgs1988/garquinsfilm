@@ -2,10 +2,10 @@
 
 | ID | Flujo | Resultado observable |
 |---|---|---|
-| F01 | Administrador emite invitación → destinatario acepta dentro de 7 días → crea cuenta con email/contraseña → inicio | Invitación ligada al email normalizado, consumida atómicamente una vez; sesión autenticada mediante Better Auth tras validar la integración; perfil propio con rol `user` asignado por servidor y sin verificación adicional de email |
+| F01 | Administrador emite invitación → destinatario acepta dentro de 7 días → crea cuenta con email/contraseña → inicio | Flujo objetivo pendiente de AUTH-001D; invitación ligada al email normalizado y consumida atómicamente una vez; Better Auth proporciona la sesión; rol `user` asignado por servidor y sin verificación adicional de email |
 | F01A | Intentar registro público, aceptar invitación vencida/usada o emitir invitación sin ser administrador | Operación rechazada; no se crea cuenta ni se revela información sensible |
 | F01B | Procedimiento local controlado crea primer administrador | Cuenta inicial con rol `admin`; no existe endpoint público de bootstrap |
-| F01C | Login → logout | Inicio de sesión limitado por rate limiting; cierre invalida la sesión y elimina la cookie de forma segura |
+| F01C | Login → consulta de sesión → logout | Core implementado con Better Auth; login limitado por rate limiting, cierre invalida sesión y elimina cookie de forma segura |
 | F02 | Buscar → ficha → añadir a pendientes | Una única entrada en biblioteca |
 | F03 | Biblioteca → título guardado → marcar visto → valorar | Cambia estado; se guarda nota válida entre 0,0 y 10,0 en incrementos de 0,1 |
 | F04 | Ficha de serie → añadir a biblioteca → marcar temporada completa | Progreso propio por temporadas actualizado |

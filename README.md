@@ -1,6 +1,6 @@
 # GarquinsFilm
 
-Monorepositorio pnpm para la aplicación web y la API de GarquinsFilm. Este bootstrap proporciona una pantalla de bienvenida y un endpoint de salud; todavía no implementa funcionalidades de producto.
+Monorepositorio pnpm para la aplicación web y la API de GarquinsFilm. La API incluye autenticación base con Better Auth; no implementa todavía invitaciones ni funcionalidades de biblioteca/catálogo.
 
 ## Requisitos
 
@@ -30,7 +30,7 @@ Para otras tareas (por ejemplo `lint`, `typecheck`, `test` o `build`), sustituye
 
 El comando `dev` inicia el frontend en <http://127.0.0.1:5173> y la API en <http://127.0.0.1:3001>. Para arrancar solo una aplicación, ejecuta `corepack pnpm --filter @garquinsfilm/web dev` o `corepack pnpm --filter @garquinsfilm/api dev` (o antepón el wrapper npm anterior si Corepack local no es compatible).
 
-La API expone `GET http://127.0.0.1:3001/health`, que devuelve `{"status":"ok"}`. Se puede cambiar el puerto con `PORT` y la dirección de escucha con `HOST`. No se requieren variables de entorno ni credenciales para el bootstrap.
+La API expone `GET http://127.0.0.1:3001/health`, que devuelve `{"status":"ok"}`. Se puede cambiar el puerto con `PORT` y la dirección de escucha con `HOST`. Better Auth requiere las variables documentadas más abajo; el placeholder de `BETTER_AUTH_SECRET` en `.env.example` no es un secreto operativo y la API lo rechazará.
 
 ## Comandos de calidad
 
@@ -42,10 +42,12 @@ La API compila a `apps/api/dist`; el frontend genera su build en `apps/web/dist`
 
 Requisitos: Docker Engine o Docker Desktop con Docker Compose v2. La configuración utiliza la imagen oficial `postgres:17-alpine`: PostgreSQL 17 continúa con soporte de seguridad hasta noviembre de 2029 y es compatible con Prisma. Se fija el major y no se usa `latest`.
 
-Crea el fichero local de configuración a partir del ejemplo y arranca el servicio:
+Crea el fichero local de configuración a partir del ejemplo, genera un secreto local de Better Auth y arranca PostgreSQL:
 
 ```bash
 cp .env.example .env
+openssl rand -base64 32
+# Copia el resultado en BETTER_AUTH_SECRET dentro de .env.
 docker compose config
 docker compose up -d
 docker compose ps
@@ -53,12 +55,15 @@ docker compose ps
 
 El servicio solo publica el puerto en `127.0.0.1`. Sus valores configurables son:
 
-| Variable            | Descripción                          | Valor de ejemplo          |
-| ------------------- | ------------------------------------ | ------------------------- |
-| `POSTGRES_DB`       | Base de datos inicial                | `garquinsfilm`            |
-| `POSTGRES_USER`     | Usuario inicial                      | `garquinsfilm`            |
-| `POSTGRES_PASSWORD` | Contraseña local de ejemplo          | `garquinsfilm_local_only` |
-| `POSTGRES_PORT`     | Puerto publicado en la máquina local | `5433`                    |
+| Variable                      | Descripción                                   | Valor de ejemplo                              |
+| ----------------------------- | --------------------------------------------- | --------------------------------------------- |
+| `POSTGRES_DB`                 | Base de datos inicial                         | `garquinsfilm`                                |
+| `POSTGRES_USER`               | Usuario inicial                               | `garquinsfilm`                                |
+| `POSTGRES_PASSWORD`           | Contraseña local de ejemplo                   | `garquinsfilm_local_only`                     |
+| `POSTGRES_PORT`               | Puerto publicado en la máquina local          | `5433`                                        |
+| `BETTER_AUTH_SECRET`          | Secreto de sesión; genera uno localmente      | No usar el placeholder                        |
+| `BETTER_AUTH_URL`             | Origen explícito de la API                    | `http://127.0.0.1:3001`                       |
+| `BETTER_AUTH_TRUSTED_ORIGINS` | Orígenes web autorizados, separados por comas | `http://127.0.0.1:5173,http://localhost:5173` |
 
 Los valores de `.env.example` son exclusivamente ejemplos de desarrollo; cambia la contraseña local antes de usar la base. `.env` está excluido de Git. La imagen aplica estas variables al inicializar un directorio de datos vacío; cambiarlas después no modifica usuarios o contraseñas ya inicializados en el volumen.
 
@@ -71,7 +76,7 @@ docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -
 
 El puerto publicado por defecto es `5433` para no interferir con una instalación local de PostgreSQL que ya use `5432`. Puedes cambiarlo en `.env` si está ocupado.
 
-Para una futura conexión de `apps/api` con Prisma, utiliza el host loopback, el puerto y credenciales de `.env` en una URL de conexión PostgreSQL:
+La conexión de `apps/api` con Prisma utiliza el host loopback, el puerto y las credenciales de `.env` en una URL de conexión PostgreSQL:
 
 ```text
 postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@127.0.0.1:<POSTGRES_PORT>/<POSTGRES_DB>?schema=public
@@ -95,7 +100,7 @@ docker compose down
 
 ## Prisma en la API
 
-`apps/api` utiliza Prisma ORM 7.10.1, `@prisma/client` 7.10.1 y el adaptador oficial `@prisma/adapter-pg` 7.10.1 con `pg`. Prisma 7 requiere un adaptador de driver en ejecución. La misma combinación Prisma 7/PostgreSQL aparece en la documentación actual del adaptador Prisma de Better Auth; la integración de Better Auth sigue fuera de alcance y deberá validarse al implementarla.
+`apps/api` utiliza Prisma ORM, `@prisma/client` y `@prisma/adapter-pg` 7.10.1 con `pg` 8.23.1. Better Auth y `@better-auth/prisma-adapter` están fijados en 1.7.11, y `@fastify/cors` en 11.3.1. La guía oficial del adaptador usa Prisma 7/PostgreSQL; el adaptador declara peers para Prisma 5, 6 y 7. El puente Fastify y los flujos se validaron en ejecución con PostgreSQL 17 aislado; CI repite las migraciones y pruebas de integración.
 
 La conexión prioriza `DATABASE_URL` del fichero raíz `.env`; `.env.example` contiene un ejemplo ficticio. Si falta esa variable pero están definidas `POSTGRES_DB`, `POSTGRES_USER` y `POSTGRES_PASSWORD`, la API deriva una URL local en `127.0.0.1` con `POSTGRES_PORT` (por defecto, `5433`), codificando los componentes de la URL. Una `DATABASE_URL` explícita permite usar otro host en entornos posteriores. La API carga el fichero para los comandos pnpm de su workspace y devuelve `503 {"status":"unavailable"}` en `GET /ready` si PostgreSQL no está accesible. `GET /health` sigue comprobando únicamente que el proceso API responde.
 
@@ -108,15 +113,13 @@ corepack pnpm --filter @garquinsfilm/api prisma:generate
 
 La generación también se invoca desde los scripts `dev`, `typecheck`, `test` y `build`; el cliente se escribe en `apps/api/src/generated` y no se versiona. CI valida y genera explícitamente después de una instalación limpia, antes de typecheck/tests/build. No depende de artefactos generados en un checkout local.
 
-La base del esquema Prisma solo declara el proveedor y el generador: todavía no hay modelos funcionales ni migraciones. Cuando se incorporen modelos, crear y revisar migraciones versionadas con `corepack pnpm --filter @garquinsfilm/api db:migrate`; para aplicar migraciones ya versionadas en un entorno se usará `db:migrate:deploy`. No usar `prisma db push` como sustituto. No ejecutar migraciones en una base compartida sin revisión.
+El esquema Prisma contiene las entidades de Better Auth (`User`, `Session`, `Account`, `Verification`) y el rol global de usuario; no contiene todavía modelos funcionales. La migración versionada `apps/api/prisma/migrations/*_auth_core` se probó en una base PostgreSQL efímera aislada. CI levanta su propio servicio PostgreSQL 17 para aplicar migraciones y ejecutar los tests de auth. No se ha aplicado esta migración al volumen local de desarrollo. No usar `prisma db push` como sustituto de migraciones versionadas.
 
-Los tests unitarios de `/ready` simulan los estados disponible y no disponible y se ejecutan sin una base real. La prueba de integración de solo lectura a PostgreSQL está desactivada por defecto; para ejecutarla explícitamente con la base local healthy y `DATABASE_URL` configurada:
+Better Auth acepta login por email/contraseña, consulta de sesión en `GET /api/auth/get-session` y cierre de sesión en `POST /api/auth/sign-out`. `POST /api/auth/sign-up/email` permanece deshabilitado hasta añadir invitaciones; el endpoint protegido de ejemplo `GET /api/me` devuelve `401` sin sesión. Las cookies son HttpOnly y SameSite=Lax; Secure se activa en producción HTTPS. Se mantienen las comprobaciones CSRF/origen y se rechazan orígenes no configurados. El rate limiting está habilitado también en desarrollo, con un límite más estricto para login y registro. No se confían headers `X-Forwarded-*`: la IP se toma de la conexión observada por Fastify.
 
-```bash
-RUN_DB_INTEGRATION_TESTS=1 corepack pnpm --filter @garquinsfilm/api test
-```
+No ejecutes migraciones ni tests de autenticación contra el volumen de desarrollo existente. Para pruebas locales, usa una base aislada con nombre terminado en `_test` y conexión loopback, o ejecuta la CI, que provisiona un servicio temporal. Las pruebas de integración requieren `AUTH_TEST_DATABASE_URL` y `RUN_AUTH_INTEGRATION_TESTS=1`; setup rechaza una URL que no sea loopback o una base cuyo nombre no termine en `_test`. `pnpm test` ejecuta los tests unitarios y añade integración cuando se establece esa configuración.
 
-La prueba solo realiza `SELECT 1`; no crea tablas ni modifica datos.
+El esquema de Better Auth se puede regenerar con `corepack pnpm --filter @garquinsfilm/api auth:schema:generate`. Después de revisar los cambios del esquema, las migraciones se crean con `corepack pnpm --filter @garquinsfilm/api db:migrate`; el comando debe apuntar exclusivamente a una base aislada de pruebas durante esta tarea. No ejecutar migraciones contra bases compartidas sin revisión.
 
 ## Estructura
 

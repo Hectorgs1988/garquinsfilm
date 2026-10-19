@@ -3,7 +3,7 @@
 ## Fase 0 — Base documental y validación
 
 - Registrar stack y reglas funcionales aprobadas en ADR y documentos de producto.
-- Mantener como gate la validación en ejecución de las versiones exactas de Better Auth, su adaptador Prisma y el puente HTTP Fastify.
+- Validación en ejecución del core Better Auth/adaptador Prisma 1.7.11, puente Fastify 5.12.7, Prisma 7.10.1 y PostgreSQL 17 aislado completada en la rama AUTH-001B; queda confirmar CI/revisión y revalidar cualquier cambio de versión.
 - Mailpit con Docker está aprobado para desarrollo local; las pruebas automatizadas usarán un remitente simulado. No se ha aprobado un proveedor remoto.
 - Verificar condiciones de TMDB para uso, atribución, imágenes y caché.
 - Mantener hosting, staging/producción, identidad visual y criterios de rankings de series como pendientes.
@@ -15,7 +15,7 @@
 - Monorepo pnpm con `apps/web`, `apps/api` y `packages/shared`.
 - CI básico con GitHub Actions, pruebas Vitest/Playwright y checks de tipos/build.
 - PostgreSQL local con Docker y migraciones Prisma reproducibles.
-- Integración Better Auth tras validar versiones exactas y el puente HTTP Fastify en ejecución.
+- Core Better Auth, sesiones y migración versionados; CI repite tests de integración en PostgreSQL efímero.
 - Invitaciones de administrador (email normalizado, 7 días, un solo uso atómico), roles globales `admin|user`, procedimiento local controlado para bootstrap del primer administrador y separación entre rol global y propiedad de listas.
 - Recuperación, sesiones/cookies seguras, límites de intentos y pruebas de aislamiento. No exigir verificación adicional del email tras invitación válida.
 - Mailpit local y remitente simulado en pruebas; sin proveedor de correo remoto aprobado.
@@ -24,9 +24,9 @@
 
 ### Desglose de AUTH-001
 
-1. Validar en ejecución las versiones exactas de Better Auth, adaptador Prisma y puente HTTP Fastify con el singleton Prisma actual. Es el gate previo a integrar.
-2. Generar y revisar el esquema de User, Session, Account y Verification, rol global y sus migraciones Prisma versionadas.
-3. Implementar el montaje Fastify y configurar sesiones/cookies, origen/CORS y CSRF sin desactivar protecciones; limitar intentos.
+1. Validar Better Auth, adaptador Prisma y puente HTTP Fastify con el singleton Prisma actual. Completado localmente para las versiones fijadas; confirmar CI/revisión.
+2. Generar y revisar el esquema de User, Session, Account y Verification, rol global y migración Prisma versionada. Completado para el core.
+3. Implementar login, consulta de sesión y logout en Fastify; configurar cookies, origen/CORS y CSRF sin desactivar protecciones y limitar intentos. Completado para el core.
 4. Cerrar registro público e implementar emisión administrativa y aceptación de invitaciones vinculadas a email normalizado, con hash, caducidad de 7 días y consumo atómico de un solo uso.
 5. Implementar recuperación y cierre de sesión, con respuestas anti-enumeración.
 6. Implementar procedimiento local controlado para bootstrap del primer administrador; nunca exponer endpoint público de bootstrap.

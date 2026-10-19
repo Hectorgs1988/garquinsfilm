@@ -10,7 +10,7 @@ Descubrir títulos, guardar lo que se quiere ver, registrar lo ya visto y compar
 
 ### 1. Cuentas y perfiles
 
-- Inicio de sesión con email y contraseña y sesiones mediante Better Auth; la implementación depende de validar en ejecución las versiones exactas de Better Auth, su adaptador Prisma y el puente HTTP Fastify.
+- Inicio de sesión con email y contraseña y sesiones mediante Better Auth. El core de API está implementado y se probó con Better Auth/adaptador Prisma 1.7.11, Fastify 5.12.7, Prisma 7.10.1 y PostgreSQL 17 aislado; la revisión técnica y los checks CI siguen siendo parte de la integración.
 - El registro público está deshabilitado. Las cuentas se crean únicamente aceptando una invitación válida emitida por un administrador.
 - Cada invitación se vincula a un email normalizado, caduca a los 7 días y solo puede usarse una vez. Su token es aleatorio, de alta entropía y almacenado únicamente como hash; la aceptación es atómica frente a solicitudes concurrentes.
 - Después de aceptar una invitación válida no se exige verificación adicional del correo.
@@ -87,4 +87,4 @@ Dos usuarios pueden gestionar el mismo título sin interferencias; solo usuarios
 
 ## Decisiones no cerradas
 
-Hosting, staging y producción; proveedor de correo remoto; validación en ejecución de las versiones exactas de Better Auth y su adaptador Prisma, además del puente HTTP Fastify; identidad visual definitiva; y reglas de rankings de series. Mailpit local y remitente simulado en tests sí están aprobados. Consultar `docs/DECISIONS.md`.
+Hosting, staging y producción; proveedor de correo remoto; confirmación CI/revisión técnica del core de Better Auth y revalidación si cambian versiones; identidad visual definitiva; y reglas de rankings de series. Mailpit local y remitente simulado en tests sí están aprobados. Consultar `docs/DECISIONS.md`.

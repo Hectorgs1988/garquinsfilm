@@ -1,6 +1,6 @@
 # Seguridad y privacidad — MVP
 
-- Better Auth será la solución para email/contraseña y sesiones. Antes de integrarla deben validarse en ejecución las versiones exactas de Better Auth, su adaptador Prisma y el puente HTTP para Fastify. No implementar credenciales, sesiones ni criptografía artesanal como sustituto.
+- Better Auth es la solución para email/contraseña y sesiones. El core está integrado con Better Auth/adaptador Prisma 1.7.11, Fastify 5.12.7 y Prisma 7.10.1; la migración y los flujos se probaron contra PostgreSQL 17 efímero aislado. Repetir la validación en CI y tras cualquier actualización de versiones. No implementar credenciales, sesiones ni criptografía artesanal como sustituto.
 - El registro público estará deshabilitado. Solo se crearán cuentas mediante invitaciones válidas, emitidas exclusivamente por administradores.
 - Vincular cada invitación a un email normalizado. Generar un token aleatorio de alta entropía y almacenar únicamente su hash; expira a los 7 días y se acepta una sola vez. La aceptación debe ser atómica y resistir solicitudes concurrentes. No exigir verificación adicional del correo después de aceptar correctamente la invitación.
 - Los roles globales son `admin` y `user`; solo el servidor puede asignarlos. Rechazar cualquier intento de asignación o elevación desde parámetros enviados por el navegador. La propiedad de listas compartidas es independiente del rol global.

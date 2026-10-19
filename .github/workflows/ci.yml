@@ -17,6 +17,20 @@ jobs:
   validate:
     name: Validate workspace
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: garquinsfilm_auth_test
+          POSTGRES_USER: gf_test
+          POSTGRES_PASSWORD: gf_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gf_test -d garquinsfilm_auth_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/garquinsfilm?schema=public
     steps:
@@ -43,6 +57,11 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm --filter @garquinsfilm/api prisma:generate
 
+      - name: Apply migrations to isolated test database
+        run: pnpm --filter @garquinsfilm/api db:migrate:deploy
+        env:
+          DATABASE_URL: postgresql://gf_test:gf_test@127.0.0.1:5432/garquinsfilm_auth_test?schema=public
+
       - name: Lint
         run: pnpm lint
 
@@ -51,6 +70,16 @@ jobs:
 
       - name: Test
         run: pnpm test
+        env:
+          DATABASE_URL: postgresql://gf_test:gf_test@127.0.0.1:5432/garquinsfilm_auth_test?schema=public
+          AUTH_TEST_DATABASE_URL: postgresql://gf_test:gf_test@127.0.0.1:5432/garquinsfilm_auth_test?schema=public
+          RUN_AUTH_INTEGRATION_TESTS: '1'
+          BETTER_AUTH_SECRET: test-only-better-auth-secret-not-for-any-deployment
+          BETTER_AUTH_URL: http://127.0.0.1:3001
+          BETTER_AUTH_TRUSTED_ORIGINS: http://127.0.0.1:5173,http://localhost:5173
 
       - name: Build
         run: pnpm build
+
+      - name: Audit dependencies
+        run: pnpm audit
