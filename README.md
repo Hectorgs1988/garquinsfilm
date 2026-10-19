@@ -38,6 +38,61 @@ Usa `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test` y `cor
 
 La API compila a `apps/api/dist`; el frontend genera su build en `apps/web/dist`. La instalación reproducible de CI utiliza `pnpm install --frozen-lockfile`.
 
+## PostgreSQL local
+
+Requisitos: Docker Engine o Docker Desktop con Docker Compose v2. La configuración utiliza la imagen oficial `postgres:17-alpine`: PostgreSQL 17 continúa con soporte de seguridad hasta noviembre de 2029 y es compatible con Prisma. Se fija el major y no se usa `latest`.
+
+Crea el fichero local de configuración a partir del ejemplo y arranca el servicio:
+
+```bash
+cp .env.example .env
+docker compose config
+docker compose up -d
+docker compose ps
+```
+
+El servicio solo publica el puerto en `127.0.0.1`. Sus valores configurables son:
+
+| Variable            | Descripción                          | Valor de ejemplo          |
+| ------------------- | ------------------------------------ | ------------------------- |
+| `POSTGRES_DB`       | Base de datos inicial                | `garquinsfilm`            |
+| `POSTGRES_USER`     | Usuario inicial                      | `garquinsfilm`            |
+| `POSTGRES_PASSWORD` | Contraseña local de ejemplo          | `garquinsfilm_local_only` |
+| `POSTGRES_PORT`     | Puerto publicado en la máquina local | `5433`                    |
+
+Los valores de `.env.example` son exclusivamente ejemplos de desarrollo; cambia la contraseña local antes de usar la base. `.env` está excluido de Git. La imagen aplica estas variables al inicializar un directorio de datos vacío; cambiarlas después no modifica usuarios o contraseñas ya inicializados en el volumen.
+
+Comprueba el healthcheck y ejecuta una consulta:
+
+```bash
+docker compose exec postgres sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+docker compose exec postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1;"'
+```
+
+El puerto publicado por defecto es `5433` para no interferir con una instalación local de PostgreSQL que ya use `5432`. Puedes cambiarlo en `.env` si está ocupado.
+
+Para una futura conexión de `apps/api` con Prisma, utiliza el host loopback, el puerto y credenciales de `.env` en una URL de conexión PostgreSQL:
+
+```text
+postgresql://<POSTGRES_USER>:<POSTGRES_PASSWORD>@127.0.0.1:<POSTGRES_PORT>/<POSTGRES_DB>?schema=public
+```
+
+Esta URL podrá configurarse como `DATABASE_URL` en el entorno local de la API. Si la contraseña contiene caracteres reservados en una URL, deben codificarse según URL encoding.
+
+Para reiniciar el contenedor conservando datos:
+
+```bash
+docker compose restart postgres
+```
+
+Para detener y eliminar el contenedor y la red, manteniendo el volumen de datos:
+
+```bash
+docker compose down
+```
+
+**Pérdida de datos:** `docker compose down -v` elimina también el volumen nombrado `postgres_data` y todos los datos persistidos. No ejecutes ese comando salvo que quieras borrar la base local por completo.
+
 ## Estructura
 
 ```text
