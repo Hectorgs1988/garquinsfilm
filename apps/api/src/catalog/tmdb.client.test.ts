@@ -565,7 +565,7 @@ describe('plazo garantizado (transportes que ignoran abort)', () => {
     expect(Date.now() - started).toBeLessThan(500);
   });
 
-  it('limita el plazo de cada intento a lo que queda del presupuesto', async () => {
+  it('limita el plazo del segundo intento a lo que queda del presupuesto', async () => {
     let clock = 0;
     const deadlines: number[] = [];
     const realSetTimeout = globalThis.setTimeout;
@@ -574,26 +574,52 @@ describe('plazo garantizado (transportes que ignoran abort)', () => {
       ms?: number,
     ) => {
       deadlines.push(ms ?? 0);
-      return realSetTimeout(handler, 1);
+      // El plazo simulado consume reloj lógico sin esperar de verdad.
+      return realSetTimeout(() => {
+        clock += ms ?? 0;
+        handler();
+      }, 1);
     }) as typeof setTimeout);
+    const totalBudgetMs = 1100;
+    let calls = 0;
     try {
-      const { client } = setup(() => new Promise<Response>(() => undefined), {
-        config: { ...config, timeoutMs: 1000 },
-        totalBudgetMs: 1500,
-        now: () => clock,
-        sleep: async (ms) => {
-          clock += ms;
+      const { client } = setup(
+        () => {
+          calls += 1;
+          return calls === 1
+            ? Promise.resolve(new Response('{}', { status: 503 }))
+            : new Promise<Response>(() => undefined);
         },
-      });
-      await rejection(client.getJson(['movie', 1]));
+        {
+          config: { ...config, timeoutMs: 1000 },
+          totalBudgetMs,
+          now: () => clock,
+          sleep: async (ms) => {
+            clock += ms;
+          },
+        },
+      );
+      const error = await rejection(client.getJson(['movie', 1]));
+      expect(error.kind).toBe('timeout');
     } finally {
       spy.mockRestore();
     }
 
-    // 1.er intento: 1000; tras 250 ms de backoff quedan 1250 → min(1000, 1250).
-    expect(deadlines[0]).toBe(1000);
-    expect(deadlines[1]).toBe(1000);
-    expect(deadlines.every((ms) => ms <= 1000)).toBe(true);
+    // 1.er intento: 1000; backoff 250 → quedan 850 < 1000 para el 2.º intento.
+    expect(calls).toBe(2);
+    expect(deadlines).toEqual([1000, 850]);
+    expect(clock).toBeLessThanOrEqual(totalBudgetMs);
+  });
+
+  it('no reintenta cuando el backoff agotaría el presupuesto', async () => {
+    const { client, fetch } = setup(async () => new Response('{}', { status: 503 }), {
+      totalBudgetMs: 200,
+    });
+
+    const error = await rejection(client.getJson(['movie', 1]));
+
+    expect(error.kind).toBe('unavailable');
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -625,7 +651,7 @@ describe('límite real del tamaño de respuesta', () => {
     expect(toCatalogHttpError(error).statusCode).toBe(502);
   });
 
-  it('acepta un Content-Length igual al máximo declarado en una respuesta válida pequeña', async () => {
+  it('acepta una respuesta válida pequeña cuyo Content-Length coincide con su tamaño real', async () => {
     const { client } = setup(
       async () => new Response('{"ok":true}', { status: 200, headers: { 'content-length': '11' } }),
     );
