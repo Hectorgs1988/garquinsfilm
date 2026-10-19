@@ -2,7 +2,9 @@ import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { getPrismaClient } from '../db/client.js';
-import { auth } from './auth.js';
+import { auth, type AuthRuntime } from './auth.js';
+import { getAuthConfig } from './config.js';
+import { createInvitationEmailDelivery, createSmtpEmailSender } from '../email/email.service.js';
 import {
   acceptInvitation,
   ActiveInvitationExistsError,
@@ -18,11 +20,11 @@ import {
   type InvitationDelivery,
 } from './invitations.service.js';
 import { hasAdminRole } from './roles.js';
-import { getAuthConfig } from './config.js';
 
 interface InvitationRoutesOptions {
   delivery?: InvitationDelivery;
   prisma?: PrismaClient;
+  auth?: AuthRuntime;
 }
 
 interface InvitationRequestBody {
@@ -40,7 +42,12 @@ const invitationRoutes: FastifyPluginAsync<InvitationRoutesOptions> = async (app
   const config = getAuthConfig();
   const trustedOrigins = new Set(config.trustedOrigins);
   const prisma = options.prisma ?? getPrismaClient();
-  const delivery = options.delivery ?? unavailableInvitationDelivery;
+  const authInstance = options.auth ?? auth;
+  const delivery =
+    options.delivery ??
+    (config.smtp.host && config.smtp.from
+      ? createInvitationEmailDelivery(createSmtpEmailSender(config.smtp), config.webAppURL)
+      : unavailableInvitationDelivery);
 
   app.addHook('onRequest', async (request, reply) => {
     const isInvitationRoute =
@@ -75,7 +82,7 @@ const invitationRoutes: FastifyPluginAsync<InvitationRoutesOptions> = async (app
       },
     },
     async (request, reply) => {
-      const session = await getSession(request);
+      const session = await getSession(request, authInstance);
       if (!session) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
@@ -127,7 +134,7 @@ const invitationRoutes: FastifyPluginAsync<InvitationRoutesOptions> = async (app
       },
     },
     async (request, reply) => {
-      const session = await getSession(request);
+      const session = await getSession(request, authInstance);
       if (!session) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
@@ -168,7 +175,7 @@ const invitationRoutes: FastifyPluginAsync<InvitationRoutesOptions> = async (app
       },
     },
     async (request, reply) => {
-      const session = await getSession(request);
+      const session = await getSession(request, authInstance);
       if (!session) {
         return reply.code(401).send({ error: 'Unauthorized' });
       }
@@ -227,9 +234,9 @@ const invitationRoutes: FastifyPluginAsync<InvitationRoutesOptions> = async (app
   );
 };
 
-async function getSession(request: FastifyRequest) {
+async function getSession(request: FastifyRequest, authInstance: AuthRuntime) {
   try {
-    return await auth.api.getSession({ headers: fromNodeHeaders(request.headers) });
+    return await authInstance.api.getSession({ headers: fromNodeHeaders(request.headers) });
   } catch (error) {
     logSafeError(request, error, 'Unable to verify authentication session.');
     return null;

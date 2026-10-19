@@ -6,7 +6,7 @@ import { createCredentialUser, hashCredentialPassword, validatePassword } from '
 export const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface InvitationDelivery {
-  // Resolve only after durable acceptance; use invitation.id as the delivery idempotency key.
+  // Resolve only after SMTP accepts the recipient; this does not guarantee final mailbox delivery.
   deliver(invitation: { id: string; email: string; token: string; expiresAt: Date }): Promise<void>;
 }
 
