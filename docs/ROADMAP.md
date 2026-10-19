@@ -16,10 +16,12 @@
 - CI básico con GitHub Actions, pruebas Vitest/Playwright y checks de tipos/build.
 - PostgreSQL local con Docker y migraciones Prisma reproducibles.
 - Core Better Auth, sesiones y migración versionados; CI repite tests de integración en PostgreSQL efímero.
-- Invitaciones de administrador, roles globales `admin|user` y bootstrap local están implementados en `feature/auth-invitations`; falta ejecutar/revisar la CI de PR.
+- Invitaciones de administrador, roles globales `admin|user` y bootstrap local están implementados e integrados en `develop`.
 - Correo SMTP local mediante Mailpit, recuperación de contraseña Better Auth, sesiones/cookies seguras, límites de intentos y pruebas de aislamiento están implementados y probados. No exigir verificación adicional del email tras invitación válida.
 - Mailpit local y remitente simulado en pruebas; sin proveedor de correo remoto aprobado.
-- Siguen pendientes el proveedor de correo de producción y los formularios frontend de aceptación de invitación y restablecimiento de contraseña. La gestión visual de invitaciones pendientes o fallidas queda como mejora futura; en el MVP, su recuperación es manual y no hay reintentos automáticos.
+- **WEB-AUTH-001** (login, aceptación de invitaciones, solicitud y restablecimiento de contraseña, y área privada inicial Mobile First con navegación inferior en móvil y lateral en escritorio) está implementado y probado localmente en `feature/web-auth-pages`, conectado a Fastify y Better Auth; pendiente de integración mediante Pull Request y de la ejecución de GitHub Actions. Los flujos de login, sesión, logout, recuperación, invitación creada por CLI y aceptación se comprobaron manualmente; no hay E2E de navegador en CI.
+- QA validó localmente, con PostgreSQL temporal y Mailpit, el envío SMTP real de invitaciones desde `POST /api/admin/invitations` hasta la aceptación (201, enlace con `email` y `token`, `ACTIVE`, usuario `user`, reutilización rechazada, 403 para no administradores y sin invitaciones `ACTIVE` ante fallo SMTP). No equivale a un proveedor de producción.
+- Siguen pendientes: el proveedor de correo de producción, GitHub Actions de la PR de WEB-AUTH-001, pruebas en dispositivo móvil físico y el cierre de ADR-006. PWA, offline y notificaciones push quedan fuera del alcance actual. La gestión visual de invitaciones pendientes o fallidas queda como mejora futura; en el MVP, su recuperación es manual y no hay reintentos automáticos.
 
 **Demo:** dos usuarios autenticados mantienen sus datos aislados.
 

@@ -115,17 +115,44 @@ Mailpit es exclusivamente una herramienta de desarrollo local. No publiques sus 
 
 El adaptador genérico considera entregado un correo únicamente cuando el servidor SMTP acepta el destinatario durante la transacción SMTP. Esto no confirma que el mensaje haya llegado a la bandeja final. La configuración de producción rechaza Mailpit y SMTP loopback; no se ha aprobado ningún proveedor remoto.
 
+## Interfaz de autenticación local
+
+**Estado de WEB-AUTH-001:** implementado y probado localmente en `feature/web-auth-pages`; pendiente de integración mediante Pull Request hacia `develop` y de la ejecución de GitHub Actions.
+
+La primera interfaz incluye `/login`, `/accept-invitation`, `/forgot-password`, `/reset-password` y el área privada `/app`. Se conecta con la API real de Fastify y Better Auth: no hay datos simulados. El servidor Vite publica un proxy de mismo origen para `/api` hacia Fastify en `127.0.0.1:3001`; las cookies de Better Auth se envían con credenciales y la ruta privada se valida en servidor mediante `GET /api/me`. No se guardan credenciales ni tokens en almacenamiento del navegador.
+
+Los enlaces de invitación y recuperación llevan el token en el fragmento (`#`). La aplicación lo captura una sola vez al cargar `/accept-invitation` o `/reset-password`, lo retira de la barra de direcciones antes de montar la interfaz y lo envía únicamente en el cuerpo de la petición HTTPS/HTTP a la API. Los enlaces de invitación enviados por SMTP incluyen `email` y `token`; las invitaciones creadas con el CLI local `auth:create-local-invitation` pueden contener únicamente `token`. En ese caso el formulario pide el correo y la API valida ambos datos. La API no distingue en su respuesta entre invitación inválida, caducada, revocada o consumida, por lo que la interfaz muestra un mensaje único.
+
+La interfaz es Mobile First: se diseña primero para 360–430 px, con controles táctiles de al menos 44 px y safe areas. El área privada usa navegación inferior en móvil y navegación lateral en escritorio; el pie de las pantallas de autenticación solo se muestra desde 1024 px. Las secciones de biblioteca, listas, rankings y recomendaciones aparecen como «Próximamente» y no son funcionales.
+
+Arranca PostgreSQL y Mailpit si aún no están activos y ejecuta ambas aplicaciones:
+
+```bash
+docker compose up -d postgres mailpit
+corepack pnpm dev
+```
+
+Abre <http://127.0.0.1:5173/login>. Si Corepack local no es compatible, utiliza el wrapper reproducible con Node 22.22.2/Corepack 0.36.0 documentado en «Instalación y desarrollo», sustituyendo `install` por `dev`. El flujo visual es Mobile First y se adapta a escritorio; la dirección visual de ADR-006 continúa pendiente de aprobación manual. El acceso no tiene registro público: hace falta una cuenta creada por invitación. El restablecimiento usa SMTP local capturado por Mailpit; la aplicación no simula cuentas ni persistencia de biblioteca.
+
+### Estado de verificación de WEB-AUTH-001
+
+- **Pruebas automatizadas:** pruebas unitarias del frontend con API simulada (login, validación, recuperación genérica, invitaciones, protección de rutas, logout y errores de red/API); pruebas de la API con PostgreSQL efímero (roles, invitaciones, reutilización, límites de intentos y recuperación); prueba SMTP del adaptador contra Mailpit y remitente simulado en el resto. Estas pruebas no sustituyen la validación manual en navegador.
+- **Comprobado manualmente (local):** login del administrador creado por bootstrap, persistencia de sesión al recargar, logout, protección de `/app` sin sesión, solicitud de recuperación con correo en Mailpit, restablecimiento y rechazo de la contraseña anterior, creación de invitación por CLI, aceptación desde el frontend, login del segundo usuario e invitación `CONSUMED`.
+- **Auditoría QA:** revisión Mobile First con Playwright a 360, 390 y 430 px y escritorio (sin scroll horizontal, controles de 44 px o más, navegación inferior, footer oculto bajo 1024 px) y comprobaciones de roles contra PostgreSQL temporal. No hay pruebas E2E de navegador en CI.
+- **Validado por QA con SMTP real local:** administrador autenticado → `POST /api/admin/invitations` → SMTP → Mailpit → enlace → aceptación, con PostgreSQL temporal aislado y cuentas ficticias. Resultados: HTTP 201 sin token ni hash en la respuesta; correo recibido en Mailpit; enlace `/accept-invitation#email=…&token=…` sin query string; invitación `ACTIVE` solo tras la entrega y la persistencia; aceptación correcta con usuario de rol `user`; reutilización del token rechazada (400, `CONSUMED`); usuario no administrador con 403 y sin correo enviado; fallo SMTP (503) sin invitaciones `ACTIVE`. Esta validación es solo local con Mailpit: confirma la aceptación SMTP, no la entrega a una bandeja real ni a un proveedor de producción. Se ejecutó con un script desechable contra la API (no desde el navegador) y no está automatizada en CI.
+- **Pendiente:** ejecución de GitHub Actions sobre la PR de WEB-AUTH-001; pruebas en un dispositivo móvil físico (teclado virtual y safe areas reales); proveedor SMTP de producción; cierre definitivo de ADR-006. PWA, modo offline y notificaciones push quedan fuera del alcance actual.
+
 ### Prueba manual de invitación y recuperación
 
-Usa una API apuntando a una base de pruebas desechable y aislada, no al volumen persistente de desarrollo ni a producción. La aceptación de invitaciones y el restablecimiento funcionan mediante la API; la interfaz frontend todavía no contiene esos formularios. Usa un cliente REST local que no registre cuerpos ni enlaces con tokens:
+Usa una API apuntando a una base de pruebas desechable y aislada, no al volumen persistente de desarrollo ni a producción. La interfaz ya incluye los formularios de aceptación y restablecimiento; los pasos siguientes indican cómo preparar los enlaces. Para llamadas directas a la API usa un cliente REST local que no registre cuerpos ni enlaces con tokens:
 
 Incluye `Origin: http://127.0.0.1:5173` en las peticiones `POST`; la API conserva las comprobaciones de origen y CSRF.
 
 1. Inicia sesión con un administrador local existente mediante `POST /api/auth/sign-in/email`, con `Origin: http://127.0.0.1:5173`, y conserva su cookie de sesión solo en el cliente local.
 2. Envía `POST /api/admin/invitations` con esa cookie y el cuerpo `{"email":"destinatario@garquinsfilm.local"}`. La respuesta no contiene el token. Abre <http://127.0.0.1:8025> y encuentra el mensaje.
-3. La invitación dura 7 días. Su URL coloca `email` y `token` en el fragmento `#` del enlace, por lo que el navegador no los transmite automáticamente al servidor. Mientras no exista formulario frontend, extrae los valores desde Mailpit y llama una sola vez a `POST /api/invitations/accept` con `email`, `name`, `password` y `token`. El rol lo asigna el servidor.
+3. La invitación dura 7 días. Su URL coloca `email` y `token` en el fragmento `#` del enlace, por lo que el navegador no los transmite automáticamente al servidor. Abre el enlace del mensaje de Mailpit en el navegador para completar el formulario de `/accept-invitation`, o llama una sola vez a `POST /api/invitations/accept` con `email`, `name`, `password` y `token`. Si la invitación se creó con el CLI local, el enlace contiene solo el token (`/accept-invitation#token=...`) y el formulario solicita el correo. El rol lo asigna el servidor.
 4. Solicita recuperación mediante `POST /api/auth/request-password-reset` con `{"email":"destinatario@garquinsfilm.local"}`. La respuesta es genérica tanto si existe la cuenta como si no. Abre el nuevo mensaje en Mailpit; el enlace expira en una hora y contiene el token solo en el fragmento.
-5. Envía `POST /api/auth/reset-password` con `{"token":"<token del fragmento>","newPassword":"<nueva contraseña>"}`. Comprueba que el inicio de sesión con la nueva contraseña funciona, que las sesiones anteriores quedan invalidadas y que repetir el token se rechaza.
+5. Abre el enlace del correo para usar `/reset-password`, o envía `POST /api/auth/reset-password` con `{"token":"<token del fragmento>","newPassword":"<nueva contraseña>"}`. Comprueba que el inicio de sesión con la nueva contraseña funciona, que las sesiones anteriores quedan invalidadas y que repetir el token se rechaza.
 
 Si SMTP acepta una invitación pero PostgreSQL falla antes de confirmar su activación, la API devuelve un error controlado y la invitación no se puede aceptar, salvo que la activación ya hubiera quedado confirmada y solo se perdiera la respuesta. No hay reintentos automáticos, colas ni regeneración automática. Cuando PostgreSQL vuelva a estar disponible, consulta `GET /api/admin/invitations` con la sesión de administrador. Si la invitación figura `ACTIVE`, su activación quedó confirmada y el destinatario puede usar el enlace enviado mientras no haya caducado ni se haya consumido/revocado. Si figura `PENDING_DELIVERY` o `DELIVERY_FAILED`, revócala con `DELETE /api/admin/invitations/{id}` y crea una invitación nueva con `POST /api/admin/invitations`. Nunca reactives ni reutilices el token del envío anterior. La administración visual de invitaciones pendientes o fallidas aún no está implementada.
 
