@@ -10,7 +10,7 @@ Descubrir títulos, guardar lo que se quiere ver, registrar lo ya visto y compar
 
 ### 1. Cuentas y perfiles
 
-- Inicio de sesión con email y contraseña y sesiones mediante Better Auth. El core y la implementación de invitaciones/bootstrap están en la rama `feature/auth-invitations`; la ejecución de GitHub Actions para esta rama queda pendiente hasta abrir su PR.
+- Inicio de sesión con email y contraseña y sesiones mediante Better Auth. Implementados e integrados en `develop`: el core de Better Auth, las invitaciones y el bootstrap local, y la recuperación de contraseña con SMTP local (Mailpit). La interfaz web de autenticación Mobile First (WEB-AUTH-001) está implementada y probada localmente en `feature/web-auth-pages`; queda pendiente su Pull Request hacia `develop` y la validación de GitHub Actions.
 - El registro público está deshabilitado. Las cuentas se crean únicamente aceptando una invitación válida emitida por un administrador.
 - Cada invitación se vincula a un email normalizado, caduca a los 7 días y solo puede usarse una vez. Su token es aleatorio, de alta entropía y almacenado únicamente como hash; la aceptación es atómica frente a solicitudes concurrentes.
 - Después de aceptar una invitación válida no se exige verificación adicional del correo.
