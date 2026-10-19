@@ -2,6 +2,8 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { getAuthConfig } from './auth/config.js';
+import { createTmdbClientProvider } from './catalog/tmdb.provider.js';
+import type { TmdbClient } from './catalog/tmdb.client.js';
 import invitationRoutes from './auth/invitation-routes.js';
 import type { InvitationDelivery } from './auth/invitations.service.js';
 import type { AuthRuntime } from './auth/auth.js';
@@ -14,12 +16,15 @@ interface BuildAppOptions {
   database?: DatabaseHealth;
   invitationDelivery?: InvitationDelivery;
   auth?: AuthRuntime;
+  tmdbClient?: TmdbClient;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ ajv: { customOptions: { removeAdditional: false } } });
   const database = options.database ?? getDatabase();
   const { trustedOrigins } = getAuthConfig();
+
+  app.decorate('tmdb', createTmdbClientProvider({ client: options.tmdbClient, logger: app.log }));
 
   app.register(cors, {
     origin: trustedOrigins,

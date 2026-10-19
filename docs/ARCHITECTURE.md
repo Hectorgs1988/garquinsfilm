@@ -58,15 +58,17 @@ React web → API Fastify → módulos de dominio → Prisma/PostgreSQL
 
 La clave TMDB se mantiene en el servidor. El navegador no realiza llamadas que requieran un secreto. Los datos del catálogo se separan de los datos privados de cada usuario; la caché depende de los términos de TMDB.
 
-## Módulo de catálogo TMDB (ADR-007 — diseño aprobado, sin implementar)
+## Módulo de catálogo TMDB (ADR-007 — diseño aprobado; cliente implementado en TMDB-API-001, pendiente de PR; rutas y servicio sin implementar)
 
 Módulo dentro del monolito `apps/api`; sin microservicios, Redis ni bases de datos adicionales. Ver contratos, errores, caché y condiciones de TMDB en `docs/API_INTEGRATION.md`.
 
 ```text
 apps/api/src/catalog/
-  tmdb.config.ts      # lectura y validación de TMDB_* (patrón de auth/config.ts)
-  tmdb.client.ts      # cliente HTTP de TMDB: Bearer, timeout, host fijo, reintentos acotados
-  tmdb.errors.ts      # errores tipados del cliente y su traducción a HTTP
+  tmdb.config.ts      # [implementado, TMDB-API-001] lectura y validación de TMDB_* (patrón de auth/config.ts)
+  tmdb.client.ts      # [implementado] cliente HTTP de TMDB: Bearer, plazo garantizado, host fijo, reintentos acotados, cuerpo limitado
+  tmdb.errors.ts      # [implementado] errores tipados del cliente y su traducción a HTTP
+  tmdb.provider.ts    # [implementado] proveedor perezoso del cliente (app.tmdb.get())
+  # catalog.service.ts, catalog.cache.ts y catalog-routes.ts: pendientes (TMDB-API-002/003)
   catalog.service.ts  # casos de uso: búsqueda y detalles; normalización; construcción de URLs de imagen
   catalog.cache.ts    # caché en memoria con TTL y límite de entradas
   catalog-routes.ts   # plugin Fastify: esquemas Ajv, sesión, rate limit
@@ -76,15 +78,15 @@ packages/shared/      # contratos TypeScript del catálogo (sin lógica de servi
 **Responsabilidades**
 
 - `tmdb.config.ts`: valida `TMDB_READ_ACCESS_TOKEN`, `TMDB_TIMEOUT_MS`, `TMDB_DEFAULT_LANGUAGE` y `TMDB_DEFAULT_REGION`. Se evalúa solo al activar el catálogo: su ausencia no impide arrancar la API ni ejecutar las pruebas de autenticación.
-- `tmdb.client.ts`: único punto que habla con TMDB. Host y esquema fijos (`https://api.themoviedb.org/3`), sin URL base configurable ni URLs aportadas por el usuario (prevención de SSRF). Cabecera `Authorization: Bearer`, `AbortSignal` para el timeout, reintentos acotados solo en GET idempotentes y respuestas tipadas. No registra token ni consulta completa.
+- `tmdb.client.ts`: único punto que habla con TMDB. Host y esquema fijos (`https://api.themoviedb.org/3`), sin URL base configurable ni URLs aportadas por el usuario (prevención de SSRF). Cabecera `Authorization: Bearer`, plazo por intento garantizado (carrera entre la operación y un temporizador, además de `AbortSignal`, de modo que no depende de que el transporte lo respete), lectura incremental del cuerpo limitada a 2 MB, redirecciones rechazadas, reintentos acotados solo en GET idempotentes y respuestas tipadas. No registra token ni consulta completa.
 - `tmdb.errors.ts`: errores propios (no encontrado, límite, no disponible, timeout, respuesta inválida) sin datos internos de TMDB.
 - `catalog.service.ts`: orquesta caché y cliente; elige `search/movie`, `search/tv` o `search/multi` (filtrando personas); normaliza a los contratos compartidos (nulos en lugar de ceros, fallback de idioma, `isSpecial` para la temporada 0) y construye URLs de imagen de `image.tmdb.org` con tamaños de una lista permitida.
 - `catalog.cache.ts`: caché en memoria con TTL y tope de entradas; la lectura verifica la expiración y nunca devuelve entradas caducadas (sin `stale-if-error`). No guarda credenciales.
 - `catalog-routes.ts`: plugin Fastify con las tres rutas aprobadas. Exige sesión Better Auth con el patrón de `auth/routes.ts` (`authInstance.api.getSession`, 401 genérico y `logSafeError`), valida con esquemas Ajv (`additionalProperties: false`, página 1–500), aplica `config.rateLimit` por ruta y traduce errores a 400/401/404/429/502/503/504 con cuerpo `{ error }`.
 
-**Inyección y pruebas.** `buildApp` recibirá una dependencia opcional `catalog` (cliente o servicio), igual que `database`, `invitationDelivery` y `auth`. Las pruebas inyectan un cliente TMDB simulado con fixtures; CI no usa credenciales ni red real. La instanciación por defecto solo ocurre si el catálogo está configurado.
+**Inyección y pruebas.** `buildApp` acepta (TMDB-API-001, implementado en rama, pendiente de revisión) la dependencia opcional `tmdbClient`, igual que `database`, `invitationDelivery` y `auth`, y expone `app.tmdb.get()`: un proveedor perezoso que devuelve el cliente inyectado o lo crea desde el entorno en la primera llamada. Sin token, la API arranca y autentica con normalidad y solo `get()` falla con `TmdbConfigError` (503 público). TMDB-API-002/003 podrán envolver este cliente en `catalog.service.ts`, que podrá exponerse como la dependencia `catalog` prevista inicialmente. Las pruebas inyectan un cliente TMDB simulado con fixtures; CI no usa credenciales ni red real.
 
-**Contratos compartidos (`packages/shared`).** Contiene solo tipos y constantes sin dependencias de servidor ni de Prisma (identidad `{ source, type, tmdbId }`, resultados de búsqueda, detalles, temporadas, límites de validación). Estado actual: `packages/shared` exporta `./src/index.ts` (TypeScript fuente) y no tiene consumidores; la API compila con `tsc` (`module`/`moduleResolution` `NodeNext`, `rootDir: src`) y la web con Vite (`moduleResolution: Bundler`). Dirección propuesta, **a validar y cerrar en TMDB-API-001** (primera tarea que lo consume):
+**Contratos compartidos (`packages/shared`).** Contiene solo tipos y constantes sin dependencias de servidor ni de Prisma (identidad `{ source, type, tmdbId }`, resultados de búsqueda, detalles, temporadas, límites de validación). Estado actual (TMDB-API-001, en rama pendiente de revisión): `packages/shared` compila con `tsc` (NodeNext, declaraciones) a `dist`, expone `types`/`default` en `exports` y lo consumen `apps/api` (NodeNext) y `apps/web` (Vite/Bundler) como `workspace:*`; los scripts raíz `typecheck`, `test` y `dev` ejecutan antes `build:shared` (una sola vez, para evitar escrituras concurrentes en `dist`) y `build` respeta el orden topológico de pnpm. Ejecutar scripts sueltos de un consumidor requiere un `dist` de `shared` actualizado. La vía inicialmente propuesta fue:
 
 - Declarar `@garquinsfilm/shared` como dependencia `workspace:*` en `apps/api` y `apps/web`.
 - Compilar `packages/shared` a `dist` con declaraciones y exponer `types`/`default` en su `exports`, de modo que la API (ESM/NodeNext) importe JavaScript y tipos ya compilados y no un `.ts` fuera de su `rootDir`, y Vite/TypeScript (Bundler) resuelvan el mismo paquete.
@@ -117,5 +119,4 @@ Si esa vía no resulta viable, se propondrá una alternativa a revisión antes d
 - Proveedor de correo remoto; Mailpit local y remitente simulado en tests sí están aprobados.
 - Hosting de staging y producción, TLS, dominios y estrategia de backups.
 - Condiciones TMDB (TMDB-TERMS-001): validación del uso previsto, compatibilidad con la cláusula de «derivados» y ubicación exacta de la atribución. Arquitectura del catálogo aprobada en ADR-007; implementación pendiente (TMDB-API-001/002/003, WEB-CATALOG-001/002).
-- Mecanismo de build de `packages/shared` para API y web (se cierra en TMDB-API-001).
 - Identidad visual definitiva.

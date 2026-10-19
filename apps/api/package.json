@@ -23,6 +23,7 @@
     "@better-auth/prisma-adapter": "1.7.11",
     "@fastify/cors": "11.3.1",
     "@fastify/rate-limit": "11.2.1",
+    "@garquinsfilm/shared": "workspace:*",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "better-auth": "1.7.11",

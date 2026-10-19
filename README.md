@@ -36,6 +36,8 @@ La API expone `GET http://127.0.0.1:3001/health`, que devuelve `{"status":"ok"}`
 
 Usa `corepack pnpm lint`, `corepack pnpm typecheck`, `corepack pnpm test` y `corepack pnpm build`; con Corepack local antiguo, ejecútalos usando el wrapper reproducible descrito arriba.
 
+`packages/shared` (contratos TypeScript compartidos) se compila a `packages/shared/dist`. Los comandos raíz `dev`, `typecheck` y `test` lo compilan antes (`build:shared`) y `build` respeta el orden de dependencias. Si ejecutas el script de una aplicación por separado (`--filter`), compila antes el paquete con `corepack pnpm build:shared`.
+
 La API compila a `apps/api/dist`; el frontend genera su build en `apps/web/dist`. La instalación reproducible de CI utiliza `pnpm install --frozen-lockfile`.
 
 ## PostgreSQL local
