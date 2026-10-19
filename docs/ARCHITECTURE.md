@@ -19,9 +19,17 @@ Las versiones concretas deben seleccionarse con compatibilidad y soporte vigente
 
 ## Autenticación
 
-Better Auth está aprobado para email/contraseña y sesiones seguras, condicionado a la validación de compatibilidad indicada arriba. El producto requiere registro por invitación y recuperación de contraseña.
+Better Auth será responsable de email/contraseña y sesiones seguras. Su integración efectiva queda condicionada a validar en ejecución las versiones exactas de Better Auth, su adaptador Prisma y el puente HTTP para Fastify con el stack instalado.
 
-El proveedor/canal de correo para invitaciones y recuperación sigue pendiente. No se deben fijar ni desplegar servicios de correo hasta que se aprueben.
+La API montará los endpoints de Better Auth bajo `/api/auth/*` mediante la integración HTTP catch-all adecuada para Fastify. Better Auth reutilizará el singleton Prisma Client de `apps/api`; no se crearán clientes ni pools duplicados. La configuración de base de datos y sus migraciones permanecerá dentro de `apps/api`.
+
+El registro público estará deshabilitado. Solo se podrán crear cuentas aceptando una invitación válida emitida por un administrador. Las invitaciones se vinculan a un email normalizado, vencen a los 7 días y se consumen atómicamente una sola vez. La aceptación correcta no requiere verificación adicional del email.
+
+Los roles globales son `admin` y `user`; solo el servidor puede asignarlos o modificarlos. Ser propietario de una lista compartida es un permiso de esa lista, separado del rol global. El primer administrador se crea con un procedimiento local controlado, nunca mediante un endpoint público.
+
+No se desactivan CSRF ni comprobaciones de origen. Se limitan los intentos de autenticación y no se registran contraseñas, cookies ni tokens. Cookies y sesiones deben configurarse de forma segura según el entorno. CORS y cualquier proxy de confianza se configurarán con orígenes/IPs explícitos, sin confiar indiscriminadamente en headers reenviados.
+
+Para desarrollo local se usará Mailpit con Docker. Las pruebas automatizadas inyectarán un remitente simulado, sin enviar correos reales. No se ha aprobado un proveedor de correo remoto.
 
 ## Estructura del monorepositorio
 
@@ -59,13 +67,13 @@ La clave TMDB se mantiene en el servidor. El navegador no realiza llamadas que r
 - GitHub Actions validará instalación reproducible, lint, tipos, pruebas y build conforme se incorporen los scripts.
 - Vitest cubrirá lógica y pruebas de módulos; Playwright cubrirá recorridos E2E seleccionados.
 - Las migraciones de Prisma deben ser reproducibles y revisarse antes de aplicarse a entornos compartidos.
-- Los logs no deben contener secretos, contraseñas, tokens de invitación ni datos personales innecesarios.
+- Los logs no deben contener secretos, contraseñas, cookies, tokens de sesión/invitación ni datos personales innecesarios.
 - La API valida entradas y aplica autorización en el servidor para biblioteca, valoraciones, progreso y listas.
 
 ## Pendientes relacionados
 
-- Compatibilidad y versiones de Better Auth, Fastify y Prisma.
-- Proveedor de correo.
+- Validación de ejecución de versiones exactas de Better Auth, su adaptador Prisma y el puente HTTP Fastify.
+- Proveedor de correo remoto; Mailpit local y remitente simulado en tests sí están aprobados.
 - Hosting de staging y producción, TLS, dominios y estrategia de backups.
 - Condiciones TMDB para atribución, almacenamiento en caché y uso de imágenes.
 - Identidad visual definitiva.

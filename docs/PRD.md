@@ -10,9 +10,14 @@ Descubrir títulos, guardar lo que se quiere ver, registrar lo ya visto y compar
 
 ### 1. Cuentas y perfiles
 
-- Inicio de sesión con email y contraseña mediante Better Auth, sujeto a validar compatibilidad de versiones con Fastify y Prisma.
-- Registro mediante invitación; recuperación de contraseña y sesiones seguras.
-- El proveedor/canal de correo para invitaciones y recuperación está pendiente de aprobación.
+- Inicio de sesión con email y contraseña y sesiones mediante Better Auth; la implementación depende de validar en ejecución las versiones exactas de Better Auth, su adaptador Prisma y el puente HTTP Fastify.
+- El registro público está deshabilitado. Las cuentas se crean únicamente aceptando una invitación válida emitida por un administrador.
+- Cada invitación se vincula a un email normalizado, caduca a los 7 días y solo puede usarse una vez. Su token es aleatorio, de alta entropía y almacenado únicamente como hash; la aceptación es atómica frente a solicitudes concurrentes.
+- Después de aceptar una invitación válida no se exige verificación adicional del correo.
+- Roles globales: `admin` y `user`. La asignación de roles se realiza exclusivamente en el servidor. La propiedad de una lista compartida es independiente del rol global.
+- El primer administrador se crea mediante un procedimiento local controlado, nunca a través de un endpoint público.
+- Se incluye recuperación de contraseña, cierre de sesión y sesiones/cookies seguras. No se desactivan CSRF ni comprobaciones de origen y se limitan intentos en endpoints de autenticación.
+- Desarrollo local: Mailpit con Docker. Las pruebas automatizadas utilizan un remitente simulado, sin envío real. No hay proveedor de correo remoto aprobado.
 - Alias visible y avatar opcional; perfil propio y cierre de sesión.
 - La biblioteca, valoraciones, progreso y favoritos son independientes y privados por usuario.
 - Los propietarios de listas controlan los miembros; la autorización se aplica en el backend.
@@ -82,4 +87,4 @@ Dos usuarios pueden gestionar el mismo título sin interferencias; solo usuarios
 
 ## Decisiones no cerradas
 
-Hosting, staging y producción; proveedor de correo; compatibilidad concreta de Better Auth con Fastify y Prisma; identidad visual definitiva; y reglas de rankings de series. Consultar `docs/DECISIONS.md`.
+Hosting, staging y producción; proveedor de correo remoto; validación en ejecución de las versiones exactas de Better Auth y su adaptador Prisma, además del puente HTTP Fastify; identidad visual definitiva; y reglas de rankings de series. Mailpit local y remitente simulado en tests sí están aprobados. Consultar `docs/DECISIONS.md`.
