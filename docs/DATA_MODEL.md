@@ -8,7 +8,7 @@
 - **Verification:** registros temporales gestionados por Better Auth. Los tokens de recuperación caducan en una hora y se consumen una sola vez. No exigir verificación adicional del email después de aceptar una invitación válida.
 - **Invitation (implementado):** id, email normalizado, `tokenHash`, `status`, `expiresAt`, `createdByUserId`, `consumedAt`, `consumedUserId` y `revokedAt`. `status` recorre `PENDING_DELIVERY → ACTIVE → CONSUMED`, con estados terminales `DELIVERY_FAILED` y `REVOKED`. Solo se persiste SHA-256 de un token aleatorio de 32 bytes; caduca a los 7 días. Solo `admin` puede emitir, listar y revocar; la aceptación exige estado `ACTIVE` y crea usuario/cuenta credential en una transacción atómica.
 - **AuditEvent (implementado):** acción, actor opcional, id de objetivo opcional y fecha; no contiene token, contraseña ni correo de invitación.
-- **Media:** id, provider=`tmdb`, external_id, type=`movie|tv`, metadata cache?, updated_at. **Unique(provider, type, external_id)**.
+- **Media:** id, provider=`tmdb`, external_id, type=`movie|tv`, metadata cache?, updated_at. **Unique(provider, type, external_id)**. _Diseño futuro:_ no existe modelo Prisma ni migración para TMDB-001 (ADR-007); el catálogo se consulta bajo demanda. `Media` solo se creará con la biblioteca (LIB-001), con referencia estable `provider='tmdb'` + `type` + `external_id` y, como mucho, una caché mínima sujeta al límite de 6 meses.
 - **LibraryEntry:** id, user_id, media_id, status, is_favorite, added_at, watched_at?, updated_at. **Unique(user_id, media_id)**.
 - **Rating:** library_entry_id único, score (decimal(3,1)), comment?, updated_at. La valoración pertenece a una entrada de biblioteca; score entre 0,0 y 10,0 en incrementos de 0,1.
 - **SeasonProgress:** id, user_id, series_media_id, season_number, watched, watched_at?. **Unique(user_id, series_media_id, season_number)**. Sólo aplica a `type=tv`.
@@ -34,6 +34,9 @@
 - La eliminación de un usuario/lista requiere reglas explícitas de retención y borrado, todavía pendientes.
 - El identificador externo numérico por sí solo no identifica un título: incluir siempre `type`.
 - La metadata TMDB no es propiedad del usuario y su caché está sujeta a las condiciones del servicio.
+- **Separación de datos del catálogo (ADR-007):** (1) _metadatos externos de TMDB_ (título, sinopsis, imágenes, votos): temporales, en caché en memoria con TTL y nunca fuente de verdad propia; (2) _identificador externo estable_: `source/provider='tmdb'` + `type` + `tmdbId`, único dato de TMDB que las futuras entidades referencian; (3) _datos propios de GarquinsFilm_: biblioteca, valoraciones, progreso y listas, que no dependen de que TMDB esté disponible; (4) bibliotecas, puntuaciones y listas futuras (LIB-001, RATING-001, LIST-001) referencian la identidad del punto 2 mediante `Media`, no copian el catálogo.
+- No se persiste el catálogo completo de TMDB. La caché de TMDB (memoria o, en el futuro, `Media.metadata`) debe expirar y no superar el máximo oficial de 6 meses; el MVP usa TTL de minutos a horas en memoria (`docs/API_INTEGRATION.md`).
+- Las ausencias de TMDB (imágenes, fechas, votos) se representan como `null`; una puntuación ausente nunca se almacena ni muestra como 0.
 
 ## Relaciones
 
