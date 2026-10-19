@@ -41,9 +41,9 @@ Las versiones concretas se fijarán durante el bootstrap atendiendo a compatibil
 
 ## ADR-003 — Autenticación y correo
 
-**Estado: PARCIALMENTE APROBADO — decisiones funcionales y de seguridad aprobadas; validación de ejecución pendiente**
+**Estado: PARCIALMENTE APROBADO — decisiones funcionales y de seguridad aprobadas; validación local completada; ejecución de CI pendiente**
 
-- Better Auth será la solución de autenticación para email/contraseña y sesiones, pendiente de validación efectiva en ejecución.
+- Better Auth 1.7.11 será la solución de autenticación para email/contraseña y sesiones. La integración con Fastify 5.12.7 y Prisma 7.10.1 se probó localmente; los modelos y la migración versionada se validaron en una base PostgreSQL 17 efímera y aislada. GitHub Actions está configurado para repetir los checks, pero su ejecución real queda pendiente hasta abrir la Pull Request. Cualquier cambio de versión requiere revalidación.
 - El registro público estará deshabilitado. Solo se crearán cuentas mediante una invitación válida.
 - Solo los administradores pueden emitir invitaciones. Cada invitación se vincula a un email normalizado, expira a los 7 días y solo puede aceptarse una vez.
 - El token de invitación será aleatorio y de alta entropía; se almacenará únicamente su hash. La aceptación será atómica y estará protegida frente a solicitudes concurrentes.
@@ -54,7 +54,7 @@ Las versiones concretas se fijarán durante el bootstrap atendiendo a compatibil
 - Para desarrollo local se utilizará Mailpit con Docker. Las pruebas automatizadas usarán un remitente simulado y no enviarán correos reales.
 - No se desactivarán las protecciones CSRF ni las comprobaciones de origen. Se protegerán sesiones y cookies, se limitarán intentos en endpoints de autenticación y no se registrarán tokens, contraseñas ni cookies.
 - No se incluirán credenciales reales en archivos versionados.
-- **PENDIENTE:** validar en ejecución las versiones exactas de Better Auth, su adaptador Prisma y el puente HTTP para Fastify con las versiones instaladas de Fastify y Prisma. El informe documental de AUTH-COMPAT-001 no sustituye esta validación.
+- **PENDIENTE:** ejecución y revisión de GitHub Actions al abrir la Pull Request. Las invitaciones, el bootstrap local del primer administrador y la recuperación de contraseña quedan para tareas posteriores. Si se cambian las versiones de Better Auth, adaptador Prisma, Fastify, Prisma o PostgreSQL, repetir las pruebas de compatibilidad antes de integrar.
 
 No implementar autenticación propia como sustituto ni alterar las decisiones aprobadas sin autorización.
 

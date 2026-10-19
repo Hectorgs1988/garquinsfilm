@@ -8,24 +8,30 @@ import type { DatabaseHealth } from './database.js';
 config({ path: resolve(process.cwd(), '../../.env') });
 
 let database: DatabaseHealth | undefined;
+let prismaClient: PrismaClient | undefined;
 
-export function getDatabase(): DatabaseHealth {
-  if (database) {
-    return database;
+export function getPrismaClient(): PrismaClient {
+  if (!prismaClient) {
+    prismaClient = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: getDatabaseUrl() }),
+    });
   }
 
-  const client = new PrismaClient({
-    adapter: new PrismaPg({ connectionString: getDatabaseUrl() }),
-  });
+  return prismaClient;
+}
 
-  database = {
-    async check() {
-      await client.$queryRaw`SELECT 1`;
-    },
-    disconnect() {
-      return client.$disconnect();
-    },
-  };
+export function getDatabase(): DatabaseHealth {
+  if (!database) {
+    const client = getPrismaClient();
+    database = {
+      async check() {
+        await client.$queryRaw`SELECT 1`;
+      },
+      disconnect() {
+        return client.$disconnect();
+      },
+    };
+  }
 
   return database;
 }

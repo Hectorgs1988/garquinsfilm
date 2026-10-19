@@ -15,11 +15,11 @@ Monorepositorio con frontend, API y contratos compartidos. El backend será un m
 - CI: GitHub Actions.
 - Catálogo externo: TMDB, accedido desde el servidor.
 
-Las versiones concretas deben seleccionarse con compatibilidad y soporte vigentes. En particular, Better Auth se integrará solo después de validar su compatibilidad con Fastify y Prisma.
+La integración de Better Auth 1.7.11 y su adaptador Prisma 1.7.11 con Fastify 5.12.7 y Prisma 7.10.1 se probó localmente. Los modelos de autenticación y su migración versionada se validaron en una base PostgreSQL 17 aislada. La ejecución real de GitHub Actions queda pendiente hasta abrir la Pull Request; cualquier cambio de estas versiones exige revalidación.
 
 ## Autenticación
 
-Better Auth será responsable de email/contraseña y sesiones seguras. Su integración efectiva queda condicionada a validar en ejecución las versiones exactas de Better Auth, su adaptador Prisma y el puente HTTP para Fastify con el stack instalado.
+Better Auth es responsable de email/contraseña y sesiones seguras. La integración core se implementó con Better Auth y `@better-auth/prisma-adapter` 1.7.11, Fastify 5.12.7 y Prisma 7.10.1; el puente HTTP, los modelos, la migración y los flujos se probaron con PostgreSQL efímero 17. La CI está configurada para repetir los tests, pero su ejecución real queda pendiente hasta abrir la Pull Request.
 
 La API montará los endpoints de Better Auth bajo `/api/auth/*` mediante la integración HTTP catch-all adecuada para Fastify. Better Auth reutilizará el singleton Prisma Client de `apps/api`; no se crearán clientes ni pools duplicados. La configuración de base de datos y sus migraciones permanecerá dentro de `apps/api`.
 
@@ -72,7 +72,8 @@ La clave TMDB se mantiene en el servidor. El navegador no realiza llamadas que r
 
 ## Pendientes relacionados
 
-- Validación de ejecución de versiones exactas de Better Auth, su adaptador Prisma y el puente HTTP Fastify.
+- Ejecutar y revisar los checks de GitHub Actions al abrir la Pull Request.
+- Implementar invitaciones, bootstrap local del primer administrador y recuperación de contraseña en tareas posteriores.
 - Proveedor de correo remoto; Mailpit local y remitente simulado en tests sí están aprobados.
 - Hosting de staging y producción, TLS, dominios y estrategia de backups.
 - Condiciones TMDB para atribución, almacenamiento en caché y uso de imágenes.

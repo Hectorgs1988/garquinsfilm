@@ -1,6 +1,6 @@
 # Modelo de datos lógico — propuesta
 
-> Modelo conceptual; no es el esquema Prisma definitivo. PostgreSQL y Prisma están aprobados. La integración efectiva de Better Auth depende de validar en ejecución las versiones exactas, su adaptador Prisma y el puente HTTP Fastify.
+> Modelo conceptual; no es el esquema Prisma definitivo. PostgreSQL y Prisma están aprobados. El core de Better Auth ya cuenta con esquema/migración Prisma versionados; invitaciones y modelos de negocio siguen fuera de esa migración.
 
 - **User:** identidad gestionada por Better Auth. Incluirá un rol global `admin|user`, asignado exclusivamente por lógica de servidor. El alta normal se produce mediante invitación aceptada; el primer administrador se crea con un procedimiento local controlado.
 - **Session:** sesiones gestionadas por Better Auth y relacionadas con User; proteger tokens y metadatos sensibles.
@@ -17,7 +17,7 @@
 
 ## Invariantes
 
-- Better Auth gestiona identidad, sesiones, cuentas de autenticación y verificaciones, una vez validada la integración.
+- Better Auth gestiona identidad, sesiones, cuentas de autenticación y verificaciones.
 - Los roles globales solo se asignan en el servidor; nunca se aceptan como autoridad desde el cliente.
 - La aceptación de invitación comprueba email normalizado, hash, caducidad y estado no consumido; la escritura debe impedir atómicamente el uso concurrente.
 - La propiedad/rol de miembro en una lista no confiere ni requiere un rol global concreto.
