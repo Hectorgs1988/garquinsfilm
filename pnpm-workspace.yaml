@@ -6,3 +6,8 @@ onlyBuiltDependencies:
   - esbuild
   - '@prisma/engines'
   - prisma
+
+# Correcciones de seguridad para dependencias transitivas.
+overrides:
+  'fast-uri@3.1.8': '3.1.9'
+  'fast-uri@4.2.2': '4.2.3'

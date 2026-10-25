@@ -80,9 +80,16 @@ describe('buildApp con el catálogo', () => {
     const getJson = vi.fn().mockResolvedValue({});
     const tmdbClient = { language: 'es-ES', region: 'ES', getJson };
     app = buildApp({ database, tmdbClient });
+    const searchResponse = await app.inject({
+      method: 'GET',
+      url: '/api/search?q=matrix',
+    });
+
+    // La ruta existe, pero requiere autenticación.
+    expect(searchResponse.statusCode).toBe(401);
 
     expect(app.tmdb.get()).toBe(tmdbClient);
-    for (const url of ['/api/search?q=matrix', '/api/media/movie/603', '/api/media/tv/1396']) {
+    for (const url of ['/api/media/movie/603', '/api/media/tv/1396']) {
       const response = await app.inject({ method: 'GET', url });
       expect(response.statusCode).toBe(404);
     }
