@@ -1,7 +1,7 @@
 # Integración con TMDB
 
 **Sitio:** https://developer.themoviedb.org/
-**Estado:** diseño aprobado en ADR-007 (`docs/DECISIONS.md`). **Implementado localmente (TMDB-API-001, rama `feature/tmdb-api-client`, pendiente de PR y GitHub Actions):** contratos TypeScript en `packages/shared`, configuración, cliente HTTP, errores tipados y su conversión HTTP, e inyección (`tmdbClient` / `app.tmdb`); véase «Cliente TMDB implementado». **No implementado todavía:** rutas `/api/search` y `/api/media/...`, normalización, caché y la interfaz (TMDB-API-002/003 y WEB-CATALOG-001/002, `docs/TASKS.md`). Ninguna prueba ni CI realiza llamadas reales a TMDB, y TMDB-TERMS-001 sigue pendiente.
+**Estado:** arquitectura aprobada en ADR-007; cliente y búsqueda existentes y detalle enriquecido implementados localmente en `feature/tmdb-details`, pendientes de revisión y CI de esta rama. Contratos en `packages/shared`. La interfaz de catálogo sigue pendiente (WEB-CATALOG-001/002). Solo pruebas con mocks; TMDB-TERMS-001 continúa pendiente. La sección final «TMDB-API-003 — detalle enriquecido» actualiza el contrato y los valores inicialmente propuestos.
 
 Convención de este documento: **[Oficial]** requisito de TMDB; **[Aprobado]** decisión del responsable registrada en ADR-007; **[Propuesta]** valor o detalle de implementación a confirmar en la tarea correspondiente; **[PENDIENTE]** sin decisión.
 
@@ -167,7 +167,7 @@ Las reglas para rankings personales se basan únicamente en las valoraciones del
 | Dato                              | TTL inicial | Máx. entradas |
 | --------------------------------- | ----------- | ------------- |
 | Búsquedas                         | 5 minutos   | 500           |
-| Detalles de película o serie      | 6 horas     | 1000          |
+| Detalles de película o serie      | 5 minutos   | 500           |
 | Configuración de imágenes de TMDB | 24 horas    | 1             |
 
 Reglas:
@@ -184,8 +184,8 @@ Reglas:
 - **[Propuesta; implementado en TMDB-API-001]** Timeout por petición de `TMDB_TIMEOUT_MS` (por defecto 5000 ms; rango válido 1000–15000 ms, fuera del cual la configuración se rechaza).
 - **[Propuesta; implementado en TMDB-API-001]** Reintentos acotados (como máximo 2) con backoff de 250 y 500 ms, solo para peticiones GET idempotentes y solo ante errores de red, timeout, 502/503/504. Un 429 de TMDB no se reintenta salvo que `Retry-After` indique una espera de 2 s o menos; en otro caso se devuelve 429 al cliente. Hay un presupuesto de tiempo total por llamada, reintentos y esperas incluidos (por defecto, el doble del timeout), y el plazo de cada intento nunca supera lo que queda de él. No se reintentan 404, otros 4xx, JSON inválido ni un 500 genérico.
 - **Anti-SSRF [Aprobado: host fijo]:** el cliente llama únicamente a `https://api.themoviedb.org/3` (host y esquema fijos en código; sin variable de URL base) y solo con rutas construidas por el servidor a partir de enteros y de parámetros validados. Nunca se hace una petición a una URL aportada por el usuario ni se siguen redirecciones a otros hosts.
-- Validación estricta de entradas (Ajv, `additionalProperties: false`), límite de página 500, longitud máxima de `q` y `include_adult=false` fijo.
-- Rate limiting propio por ruta mediante el plugin existente. **[Propuesta]** valores iniciales: búsqueda 30/min y detalles 60/min por usuario o IP.
+- Validación estricta de entradas en los módulos `catalog.validation.ts` y `catalog.detail.validation.ts` (propiedades desconocidas rechazadas), límite de página 500, longitud máxima de `q` y `include_adult=false` fijo.
+- Rate limiting propio por ruta mediante el plugin existente. **Implementado localmente:** búsqueda y detalles 30/min por IP.
 - Logs sanitizados: solo tipo de error, motivo, código de estado, intento y duración; nunca el token, la consulta `q` ni fragmentos del cuerpo remoto.
 - TMDB caído: error controlado y recuperable en la interfaz; los datos propios (biblioteca, valoraciones, listas) no dependen de TMDB y no se ven afectados.
 
@@ -211,10 +211,10 @@ Estado: implementado localmente en `feature/tmdb-api-client`, **pendiente de PR 
 
   Los mensajes públicos son genéricos; la causa interna (`reason`) no se envía al cliente.
 
-- **Inyección:** `buildApp({ tmdbClient })` y `app.tmdb.get()` (proveedor perezoso); los tests inyectan un cliente simulado `{ language, region, getJson }`. TMDB-API-002/003 construirán sobre él `catalog.service.ts`.
+- **Inyección:** `buildApp({ tmdbClient })` y `app.tmdb.get()` (proveedor perezoso); los tests inyectan un cliente simulado `{ language, region, getJson }`. Búsqueda y detalle lo utilizan desde `catalog.search.ts` y `catalog.detail.ts`.
 - **Variables:** `TMDB_DEFAULT_LANGUAGE` (`xx-XX`, por defecto `es-ES`) y `TMDB_DEFAULT_REGION` (`XX`, por defecto `ES`) se validan; el cliente las expone como `language` y `region`.
-- **Pendiente para TMDB-API-002/003:** el cliente devuelve `unknown`; la validación y normalización de las respuestas, la caché y las rutas.
-- **Imágenes [Aprobado: sin proxy]:** el servidor construye `https://image.tmdb.org/t/p/{tamaño}{ruta}` a partir de los `*_path` de TMDB, con host fijo y tamaños de una lista permitida. **[Propuesta]** inicial: póster `w342` en búsqueda y `w500` en detalle (`w185` para temporadas), fondo `w780`. El navegador las descarga directamente de la CDN; la IP del usuario llega a TMDB (consecuencia aceptada en ADR-007). Una ruta ausente, no válida o con tamaño no permitido produce `null`.
+- **TMDB-API-002/003 (local):** el cliente devuelve `unknown`; los servicios validan y normalizan la respuesta antes de cachearla.
+- **Imágenes [Aprobado: sin proxy]:** el servidor construye `https://image.tmdb.org/t/p/{tamaño}{ruta}` a partir de los `*_path` de TMDB, con host fijo y tamaños de una lista permitida. **Implementado localmente:** póster `w342` en búsqueda, detalle y temporadas; fondo `w1280`, perfil `w185` y logotipo `w92`. El navegador las descarga directamente de la CDN; la IP del usuario llega a TMDB (consecuencia aceptada en ADR-007). Una ruta ausente, no válida o con tamaño no permitido produce `null`.
 - **Pruebas:** mocks y fixtures del cliente TMDB inyectados en la aplicación; ninguna prueba ni CI usa credenciales reales ni red real.
 - La credencial solo es necesaria cuando se active el catálogo; su ausencia no impide arrancar la API ni ejecutar las pruebas de autenticación existentes.
 
@@ -232,3 +232,76 @@ Se documentan en `.env.example` (sin valores secretos). No hay `TMDB_API_BASE_UR
 ## Restricción de IA
 
 **[Aprobado / Oficial]** No enviar contenido TMDB a sistemas de IA generativa ni usarlo para entrenamiento sin autorización y licencias verificadas; los términos de TMDB lo prohíben expresamente para ML/IA. El MVP utiliza filtrado y reglas convencionales.
+
+
+## TMDB-API-003 — detalle enriquecido (implementación local, 2026-10-25)
+
+Esta sección actualiza el contrato inicial de detalle según la sección 9 de
+`GARQUINSFILM_FUNCTIONAL_DECISIONS.md` y la ampliación solicitada por el responsable.
+Implementado en `feature/tmdb-details`, pendiente de revisión, PR y CI.
+TMDB-API-002 ya dispone de búsqueda, validación, normalización y caché locales;
+no se modifica su comportamiento en esta ampliación. TMDB-TERMS-001 permanece pendiente:
+solo mocks, sin credenciales ni consultas reales. No hay cambios de PostgreSQL.
+
+### Composición y normalización
+
+- Una petición por carga a `movie/:id` o `tv/:id`, con `language` del cliente y
+  `append_to_response=credits,videos,watch/providers`. Sin parámetro `region` en
+  estos endpoints; la selección de streaming usa exclusivamente `results.ES`.
+- `tmdbId` de entrada acepta `^[1-9][0-9]*$` y solo enteros seguros positivos de
+  JavaScript (máximo 9007199254740991); sustituye el patrón orientativo de diez dígitos.
+  No se admiten parámetros query en detalle; se rechazan con 400 tras comprobar sesión.
+  El ID principal recibido debe coincidir con el solicitado. Si los anexos incluyen
+  `id`, también debe coincidir (tipo numérico incluido). Un fallo produce 502 y no se cachea.
+- `cast: MediaCastMember[]`: `{ tmdbId, name, character, profileUrl, order }`;
+  fotos en tamaño `w185` y personaje opcionales nulos; orden no negativo o nulo. Orden ascendente,
+  posiciones ausentes al final, duplicados por persona descartados.
+- Películas: `directors: MediaCrewMember[]`, solo créditos con `job=Director`.
+  Series: `creators: MediaCrewMember[]`, desde `created_by`, con `job=Creator`.
+  Miembro: `{ tmdbId, name, job, profileUrl }`. IDs enteros seguros positivos;
+  nombre obligatorio, fotografía opcional de la CDN oficial, sin duplicados.
+- `videos: MediaVideo[]`: `{ id, name, site, key, type, official, language, url,
+  embedUrl }`. Lista permitida de proveedores: YouTube (clave de 11 caracteres
+  alfanuméricos, guion o guion bajo) y Vimeo (ID numérico positivo de hasta 12 cifras).
+  Tipos: Trailer, Teaser, Clip, Featurette, Behind the Scenes y Bloopers. URLs
+  construidas en servidor, sin aceptar URLs externas del payload ni autoplay;
+  YouTube usa el dominio de incrustación `youtube-nocookie.com`. Duplicados por
+  proveedor/clave descartados. Idioma ISO de dos letras o nulo.
+- `trailer: MediaVideo | null`: primer Trailer o Teaser compatible, priorizando
+  Trailer sobre Teaser, oficial sobre no oficial e idioma español en empate;
+  desempate estable por ID. No se hace una segunda petición si no hay vídeos.
+  No se garantiza un tráiler traducido: se usan los disponibles en la respuesta.
+- `watchProviders: MediaWatchProviders`: `{ region: 'ES', attribution: 'JustWatch',
+  link, subscription, rent, buy }`. Mapeo desde `flatrate`, `rent`, `buy`; no se
+  incorporan `free`, `ads` ni otros países. Proveedor: `{ tmdbId, name, logoUrl }`.
+  Logotipos en tamaño `w92`. Sin precios. Deduplicación dentro de cada modalidad; un proveedor puede aparecer
+  en varias. `link` solo acepta HTTPS de `www.themoviedb.org`, sin credenciales,
+  hacia `/<type>/<id>/watch?locale=ES` (slug alfanumérico opcional tras el ID), sin parámetros adicionales ni fragmentos.
+- Ausencias o formatos inválidos en datos opcionales producen listas vacías o
+  nulos; nunca se reenvían campos desconocidos. `runtime=0` se representa como null.
+  La sinopsis ausente sigue siendo null; la segunda consulta por idioma original
+  permanece pendiente y no se activa en esta tarea.
+
+### Caché, privacidad e interfaz futura
+
+Se reutiliza `CatalogCache`: TTL **5 minutos**, máximo **500 entradas**, LRU y
+máximo **20 cargas simultáneas distintas** por caché (búsqueda y detalle independientes).
+Estas cifras sustituyen los valores propuestos inicialmente para detalles.
+Clave: tipo, ID, idioma y región. Una carga incluye detalle y anexos normalizados;
+peticiones idénticas comparten carga. No se cachean errores, identidades discordantes
+ni datos caducados. Autenticación Better Auth en cada petición, también con caché vigente. Las respuestas de detalle indican `Cache-Control: private, no-store` para impedir almacenamiento HTTP fuera de esta caché interna.
+
+El modal pertenece a WEB-CATALOG-002: solo montar el reproductor tras acción del
+usuario; sin autoplay al abrir ficha; cierre visible/Escape, detener reproducción y
+restaurar foco. No ofrecer acción si `trailer=null`. Incrustar los proveedores
+validados implica solicitudes a terceros después de esa acción; no se carga vídeo
+ni se consulta su proveedor desde esta API. Disponibilidad vacía se presenta como
+«Disponibilidad no disponible», no como ausencia confirmada de ofertas. Mostrar
+la atribución **JustWatch** y el enlace de fuente cuando exista, además de TMDB;
+comprobar términos y presentación antes de usar datos reales.
+
+Referencias técnicas consultadas el 2026-10-25 (solo documentación, sin llamadas API):
+[append_to_response](https://developer.themoviedb.org/docs/append-to-response),
+[detalle movie](https://developer.themoviedb.org/reference/movie-details),
+[detalle tv](https://developer.themoviedb.org/reference/tv-series-details),
+[proveedores y atribución JustWatch](https://developer.themoviedb.org/reference/movie-watch-providers).

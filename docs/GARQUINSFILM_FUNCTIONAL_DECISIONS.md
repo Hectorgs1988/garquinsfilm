@@ -179,7 +179,7 @@ Las fichas de películas y series mostrarán, **cuando los datos estén disponib
 
 **Disponibilidad de streaming:** informativa y no necesariamente en tiempo real. No se muestran precios sin una fuente fiable; la falta de resultados se comunica como «Disponibilidad no disponible», nunca como una afirmación de que ningún servicio ofrece el título. La atribución y enlaces de fuente se ajustarán a los términos aplicables.
 
-**Dependencia técnica:** este alcance es superior al contrato inicial de TMDB-API-003. La implementación requerirá decidir cómo obtener créditos, vídeos y proveedores (endpoints complementarios o composición de respuestas), actualizar el backlog y comprobar los términos antes de utilizar datos reales.
+**Dependencia técnica:** la ampliación API se implementa localmente en `feature/tmdb-details` (TMDB-API-003), con `append_to_response` para créditos, vídeos y proveedores, contratos y reglas actualizados en `API_INTEGRATION.md` y backlog en `TASKS.md`. Pendiente de revisión, PR y CI. El modal y la presentación son WEB-CATALOG-002. TMDB-TERMS-001 sigue pendiente y bloquea datos reales; las pruebas usan exclusivamente mocks.
 
 ## 10. Consulta y presentación de la biblioteca — aprobado
 

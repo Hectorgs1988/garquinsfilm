@@ -76,7 +76,7 @@ describe('buildApp con el catálogo', () => {
     }
   });
 
-  it('permite inyectar un cliente simulado y no registra rutas de catálogo', async () => {
+  it('permite inyectar un cliente simulado y protege las rutas de catálogo', async () => {
     const getJson = vi.fn().mockResolvedValue({});
     const tmdbClient = { language: 'es-ES', region: 'ES', getJson };
     app = buildApp({ database, tmdbClient });
@@ -91,7 +91,9 @@ describe('buildApp con el catálogo', () => {
     expect(app.tmdb.get()).toBe(tmdbClient);
     for (const url of ['/api/media/movie/603', '/api/media/tv/1396']) {
       const response = await app.inject({ method: 'GET', url });
-      expect(response.statusCode).toBe(404);
+
+      // Las rutas existen, pero requieren una sesión válida.
+      expect(response.statusCode).toBe(401);
     }
     expect(getJson).not.toHaveBeenCalled();
   });

@@ -48,8 +48,57 @@ export interface MediaGenre {
   name: string;
 }
 
+export interface MediaCastMember {
+  tmdbId: number;
+  name: string;
+  character: string | null;
+  profileUrl: string | null;
+  order: number | null;
+}
+
+export interface MediaCrewMember {
+  tmdbId: number;
+  name: string;
+  job: 'Director' | 'Creator';
+  profileUrl: string | null;
+}
+
+/** Solo proveedores y claves validados; el reproductor se carga tras una acción del usuario. */
+export interface MediaVideo {
+  id: string;
+  name: string;
+  site: 'YouTube' | 'Vimeo';
+  key: string;
+  type: 'Trailer' | 'Teaser' | 'Clip' | 'Featurette' | 'Behind the Scenes' | 'Bloopers';
+  official: boolean;
+  language: string | null;
+  url: string;
+  embedUrl: string;
+}
+
+export interface MediaWatchProvider {
+  tmdbId: number;
+  name: string;
+  logoUrl: string | null;
+}
+
+/** Información de España, sin precios. Listas vacías significan disponibilidad no disponible. */
+export interface MediaWatchProviders {
+  region: 'ES';
+  attribution: 'JustWatch';
+  link: string | null;
+  subscription: MediaWatchProvider[];
+  rent: MediaWatchProvider[];
+  buy: MediaWatchProvider[];
+}
+
 export interface MovieDetail extends MediaSummary {
   type: 'movie';
+  cast: MediaCastMember[];
+  directors: MediaCrewMember[];
+  videos: MediaVideo[];
+  trailer: MediaVideo | null;
+  watchProviders: MediaWatchProviders;
   releaseDate: string | null;
   runtime: number | null;
   genres: MediaGenre[];
@@ -70,6 +119,11 @@ export interface TvSeason {
 
 export interface TvDetail extends MediaSummary {
   type: 'tv';
+  cast: MediaCastMember[];
+  creators: MediaCrewMember[];
+  videos: MediaVideo[];
+  trailer: MediaVideo | null;
+  watchProviders: MediaWatchProviders;
   firstAirDate: string | null;
   numberOfSeasons: number | null;
   numberOfEpisodes: number | null;
