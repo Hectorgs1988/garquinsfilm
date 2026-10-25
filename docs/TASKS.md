@@ -61,3 +61,25 @@
 ## Plantilla por issue
 
 **Objetivo** / **Alcance** / **No incluye** / **Dependencias** / **Criterios de aceptación** / **Tests** / **Docs afectadas**.
+
+
+### Actualización local — 2026-10-25, rama `feature/tmdb-details`
+
+Este estado sustituye las menciones anteriores a TMDB-API-002/003 «sin iniciar».
+TMDB-API-002 ya está presente en la base local: búsqueda, validación, normalización,
+caché TTL de 5 minutos con LRU, concurrencia, auth y errores. La ampliación actual
+mantiene su comportamiento y ejecuta sus pruebas de regresión.
+
+TMDB-API-003 incorpora el trabajo local previo y amplía sus criterios de aceptación:
+reparto, directores de películas, creadores de series, vídeos/tráiler con proveedores
+validados y streaming ES agrupado en suscripción/alquiler/compra, sin precios.
+Composición con `append_to_response`, normalización defensiva y comprobación de IDs
+principales y anexados; misma caché y Better Auth en cada consulta. Contratos y reglas
+precisas en la sección TMDB-API-003 de `API_INTEGRATION.md`.
+Implementación local pendiente de revisión, PR y CI; no equivale a integración.
+
+WEB-CATALOG-002 deberá consumir estos campos, mostrar atribuciones TMDB/JustWatch y
+«Disponibilidad no disponible» si faltan resultados, e implementar el modal accesible
+sin carga ni reproducción antes de una acción del usuario. No forma parte de esta tarea API.
+TMDB-TERMS-001 sigue bloqueando el uso de datos reales; solo mocks, sin migraciones,
+push, PR ni merge en esta sesión.

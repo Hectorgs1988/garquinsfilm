@@ -1,12 +1,17 @@
-import { fromNodeHeaders } from 'better-auth/node';
 import type { FastifyPluginAsync } from 'fastify';
-import type { MediaSearchResponse } from '@garquinsfilm/shared';
+import type { MediaDetail, MediaSearchResponse } from '@garquinsfilm/shared';
 
 import { auth, type AuthRuntime } from '../auth/auth.js';
 import { CatalogCache, CatalogCacheBusyError } from './catalog.cache.js';
 import { createCatalogSearchService } from './catalog.search.js';
+import { createCatalogDetailService } from './catalog.detail.js';
 import { CatalogValidationError, validateSearchParams } from './catalog.validation.js';
+import {
+  CatalogDetailValidationError,
+  validateMediaDetailParams,
+} from './catalog.detail.validation.js';
 import { TmdbError, toCatalogHttpError } from './tmdb.errors.js';
+import { fromNodeHeaders } from 'better-auth/node';
 
 interface CatalogRoutesOptions {
   auth?: AuthRuntime;
@@ -26,6 +31,16 @@ const catalogRoutes: FastifyPluginAsync<CatalogRoutesOptions> = async (app, opti
     searchService ??= createCatalogSearchService(app.tmdb.get(), { cache });
 
     return searchService;
+  }
+
+  const detailCache = new CatalogCache<MediaDetail>();
+
+  let detailService: ReturnType<typeof createCatalogDetailService> | undefined;
+
+  function getDetailService() {
+    detailService ??= createCatalogDetailService(app.tmdb.get(), { cache: detailCache });
+
+    return detailService;
   }
 
   app.get(
@@ -106,6 +121,98 @@ const catalogRoutes: FastifyPluginAsync<CatalogRoutesOptions> = async (app, opti
             errorType: error instanceof Error ? error.name : 'UnknownError',
           },
           'Catalog search failed.',
+        );
+
+        return reply.code(503).send({
+          error: 'El catálogo no está disponible temporalmente.',
+        });
+      }
+    },
+  );
+
+  app.get<{ Params: { type: string; tmdbId: string } }>(
+    '/api/media/:type/:tmdbId',
+    {
+      config: {
+        rateLimit: {
+          max: 30,
+          timeWindow: '1 minute',
+        },
+      },
+    },
+    async (request, reply) => {
+      reply.header('Cache-Control', 'private, no-store');
+      // 1. Verificar la sesión con Better Auth.
+      try {
+        const session = await authInstance.api.getSession({
+          headers: fromNodeHeaders(request.headers),
+        });
+
+        if (!session) {
+          return reply.code(401).send({
+            error: 'Unauthorized',
+          });
+        }
+      } catch (error) {
+        request.log.error(
+          {
+            errorType: error instanceof Error ? error.name : 'UnknownError',
+          },
+          'Catalog detail session verification failed.',
+        );
+
+        return reply.code(503).send({
+          error: 'No se pudo verificar la sesión.',
+        });
+      }
+
+      // 2. Validar tipo de contenido e identificador.
+      let params;
+
+      try {
+        if (Object.keys(request.query as Record<string, unknown>).length > 0) {
+          throw new CatalogDetailValidationError();
+        }
+        params = validateMediaDetailParams(request.params);
+      } catch (error) {
+        if (error instanceof CatalogDetailValidationError) {
+          return reply.code(400).send({
+            error: error.message,
+          });
+        }
+
+        throw error;
+      }
+
+      // 3. Consultar el servicio compartido y su caché.
+      try {
+        const result = await getDetailService().getDetail(params);
+
+        return reply.code(200).send(result);
+      } catch (error) {
+        if (error instanceof CatalogCacheBusyError) {
+          reply.header('Retry-After', '1');
+
+          return reply.code(503).send({
+            error: 'La capacidad de búsqueda del catálogo se ha excedido.',
+          });
+        }
+
+        if (error instanceof TmdbError) {
+          const mapped = toCatalogHttpError(error);
+
+          if (mapped.retryAfterSeconds !== undefined) {
+            reply.header('Retry-After', String(mapped.retryAfterSeconds));
+          }
+
+          return reply.code(mapped.statusCode).send(mapped.body);
+        }
+
+        request.log.error(
+          {
+            errorType: error instanceof Error ? error.name : 'UnknownError',
+          },
+          'Catalog detail failed.',
         );
 
         return reply.code(503).send({
