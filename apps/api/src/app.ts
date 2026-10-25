@@ -11,6 +11,7 @@ import authRoutes from './auth/routes.js';
 import { getDatabase } from './db/client.js';
 import type { DatabaseHealth } from './db/database.js';
 import healthRoute from './routes/health.js';
+import catalogRoutes from './catalog/catalog.routes.js';
 
 interface BuildAppOptions {
   database?: DatabaseHealth;
@@ -41,6 +42,10 @@ export function buildApp(options: BuildAppOptions = {}) {
     auth: options.auth,
     delivery: options.invitationDelivery,
   });
+  app.register(catalogRoutes, {
+    auth: options.auth,
+  });
+
   app.register(healthRoute, { database });
   app.addHook('onClose', async () => {
     await database.disconnect();
