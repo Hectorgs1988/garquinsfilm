@@ -17,8 +17,15 @@ import {
   Loading,
   PasswordField,
 } from './components.js';
+import { CatalogPage } from './catalog/CatalogPage.js';
 
-type Route = '/login' | '/accept-invitation' | '/forgot-password' | '/reset-password' | '/app';
+type Route =
+  | '/login'
+  | '/accept-invitation'
+  | '/forgot-password'
+  | '/reset-password'
+  | '/app'
+  | '/app/explore';
 
 const PASSWORD_RESET_CONFIRMATION =
   'Si existe una cuenta con ese correo, recibirás las instrucciones para recuperar el acceso.';
@@ -30,7 +37,8 @@ function getRoute(): Route {
     path === '/accept-invitation' ||
     path === '/forgot-password' ||
     path === '/reset-password' ||
-    path === '/app'
+    path === '/app' ||
+    path === '/app/explore'
   ) {
     return path;
   }
@@ -102,7 +110,7 @@ export default function App({ initialAuthHash = '' }: { initialAuthHash?: string
 
   useEffect(() => {
     if (sessionLoading) return;
-    if (route === '/app' && !user) navigate('/login', true);
+    if (route.startsWith('/app') && !user) navigate('/login', true);
     if (
       user &&
       (route === '/login' || route === '/forgot-password' || route === '/accept-invitation')
@@ -119,7 +127,7 @@ export default function App({ initialAuthHash = '' }: { initialAuthHash?: string
     );
   }
 
-  if (route === '/app') {
+  if (route === '/app' || route === '/app/explore') {
     if (!user) {
       return (
         <main className="app-shell">
@@ -129,6 +137,7 @@ export default function App({ initialAuthHash = '' }: { initialAuthHash?: string
     }
     return (
       <PrivateHome
+        route={route}
         user={user}
         error={sessionError}
         onLogout={async () => {
@@ -538,26 +547,34 @@ function ResetPasswordPage({ initialAuthHash }: { initialAuthHash: string }) {
 }
 
 const privateSections = [
-  { label: 'Inicio', icon: '⌂', current: true },
-  { label: 'Biblioteca', icon: '▤', current: false },
-  { label: 'Listas', icon: '▧', current: false },
-  { label: 'Rankings', icon: '↗', current: false },
+  { label: 'Inicio', icon: '⌂', path: '/app' as const },
+  { label: 'Explorar', icon: '⌕', path: '/app/explore' as const },
+  { label: 'Biblioteca', icon: '▤', path: null },
+  { label: 'Listas', icon: '▧', path: null },
+  { label: 'Rankings', icon: '↗', path: null },
 ];
 
 function PrivateHome({
+  route,
   user,
   error,
   onLogout,
 }: {
+  route: Route;
   user: SessionUser;
   error: string;
   onLogout: () => Promise<void>;
 }) {
   const [loading, setLoading] = useState(false);
+  const isExplorePage = route === '/app/explore';
+
   async function handleLogout() {
     setLoading(true);
-    await onLogout();
-    setLoading(false);
+    try {
+      await onLogout();
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -576,90 +593,112 @@ function PrivateHome({
       </header>
       <div className="private-layout">
         <aside className="desktop-navigation" aria-label="Navegación principal">
-          <NavigationList />
+          <NavigationList route={route} />
           <div className="sidebar-note">Tu espacio, siempre a tu manera.</div>
         </aside>
-        <section className="private-content" aria-labelledby="welcome-title">
-          <div className="welcome-panel">
-            <div className="welcome-copy">
-              <span className="eyebrow">TU ESPACIO PERSONAL</span>
-              <h1 id="welcome-title">Hola, {user.name || user.email.split('@')[0]}.</h1>
-              <p>Un buen lugar para empezar a organizar tus próximas historias.</p>
-            </div>
-            <div className="welcome-art" aria-hidden="true">
-              <div className="art-screen">
-                <span />
-                <span />
-                <span />
+        <section
+          className="private-content"
+          aria-labelledby={isExplorePage ? 'catalog-title' : 'welcome-title'}
+        >
+          {isExplorePage ? (
+            <>
+              {error && <Alert variant="error">{error}</Alert>}
+              <CatalogPage />
+            </>
+          ) : (
+            <>
+              <div className="welcome-panel">
+                <div className="welcome-copy">
+                  <span className="eyebrow">TU ESPACIO PERSONAL</span>
+                  <h1 id="welcome-title">Hola, {user.name || user.email.split('@')[0]}.</h1>
+                  <p>Un buen lugar para empezar a organizar tus próximas historias.</p>
+                </div>
+                <div className="welcome-art" aria-hidden="true">
+                  <div className="art-screen">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                  <div className="art-glow" />
+                </div>
               </div>
-              <div className="art-glow" />
-            </div>
-          </div>
-          {error && <Alert variant="error">{error}</Alert>}
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">PRÓXIMAMENTE</span>
-              <h2>Tu próxima gran historia</h2>
-            </div>
-          </div>
-          <div className="feature-grid">
-            <FeatureCard
-              icon="▤"
-              title="Mi biblioteca"
-              description="Tus películas y series, en un solo lugar."
-            />
-            <FeatureCard
-              icon="▧"
-              title="Mis listas"
-              description="Colecciones para compartir y descubrir."
-            />
-            <FeatureCard icon="↗" title="Rankings" description="Selecciones creadas a tu medida." />
-            <FeatureCard
-              icon="✦"
-              title="Recomendaciones"
-              description="Nuevas historias por explorar."
-            />
-          </div>
+
+              {error && <Alert variant="error">{error}</Alert>}
+
+              <div className="section-heading">
+                <div>
+                  <span className="eyebrow">PRÓXIMAMENTE</span>
+                  <h2>Tu próxima gran historia</h2>
+                </div>
+              </div>
+
+              <div className="feature-grid">
+                <FeatureCard
+                  icon="▤"
+                  title="Mi biblioteca"
+                  description="Tus películas y series, en un solo lugar."
+                />
+                <FeatureCard
+                  icon="▧"
+                  title="Mis listas"
+                  description="Colecciones para compartir y descubrir."
+                />
+                <FeatureCard
+                  icon="↗"
+                  title="Rankings"
+                  description="Selecciones creadas a tu medida."
+                />
+                <FeatureCard
+                  icon="✦"
+                  title="Recomendaciones"
+                  description="Nuevas historias por explorar."
+                />
+              </div>
+            </>
+          )}
         </section>
       </div>
       <nav className="mobile-navigation" aria-label="Navegación principal">
-        <NavigationList />
+        <NavigationList route={route} />
       </nav>
     </main>
   );
 }
 
-function NavigationList() {
+function NavigationList({ route }: { route: Route }) {
   return (
     <ul className="navigation-list">
-      {privateSections.map((section) => (
-        <li key={section.label}>
-          {section.current ? (
-            <a
-              className="navigation-item is-current"
-              href="/app"
-              aria-current="page"
-              aria-label={section.label}
-            >
-              <span className="navigation-icon" aria-hidden="true">
-                {section.icon}
+      {privateSections.map((section) => {
+        const isCurrent = section.path === route;
+        return (
+          <li key={section.label}>
+            {section.path ? (
+              <a
+                className={`navigation-item ${isCurrent ? 'is-current' : ''}`}
+                href={section.path}
+                onClick={handleLink(section.path)}
+                aria-current={isCurrent ? 'page' : undefined}
+              >
+                <span className="navigation-icon" aria-hidden="true">
+                  {section.icon}
+                </span>
+                <span>{section.label}</span>
+              </a>
+            ) : (
+              <span
+                className="navigation-item navigation-item-disabled"
+                aria-disabled="true"
+                aria-label={`${section.label}, próximamente`}
+              >
+                <span className="navigation-icon" aria-hidden="true">
+                  {section.icon}
+                </span>
+                <span>{section.label}</span>
               </span>
-              <span>{section.label}</span>
-            </a>
-          ) : (
-            <span
-              className="navigation-item navigation-item-disabled"
-              aria-disabled="true"
-              aria-label={`${section.label}, próximamente`}
-            >
-              <span className="navigation-icon" aria-hidden="true">
-                {section.icon}
-              </span>
-              <span>{section.label}</span>
-            </span>
-          )}
-        </li>
-      ))}
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

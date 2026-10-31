@@ -270,6 +270,30 @@ describe('flujo de autenticación y navegación privada', () => {
     expect(screen.queryByRole('heading', { name: 'Tu espacio personal' })).toBeNull();
   });
 
+  it('protege /app/explore y permite el catálogo únicamente con una sesión válida', async () => {
+    window.history.replaceState(null, '', '/app/explore');
+    const { unmount } = render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Qué bueno tenerte de vuelta.' }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Descubre tu próxima historia.' })).toBeNull();
+
+    unmount();
+    api.getCurrentUser.mockResolvedValue(testUser);
+    window.history.replaceState(null, '', '/app/explore');
+    render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Descubre tu próxima historia.' }),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getAllByRole('link', { name: 'Explorar' })
+        .every((link) => link.getAttribute('aria-current') === 'page'),
+    ).toBe(true);
+  });
+
   it('cierra la sesión real y vuelve al login', async () => {
     api.getCurrentUser.mockResolvedValue(testUser);
     window.history.replaceState(null, '', '/app');
