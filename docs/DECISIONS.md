@@ -12,7 +12,7 @@ Este documento distingue decisiones aprobadas de cuestiones todavía pendientes.
 - **PROD-006:** El progreso de series se registra por temporadas completas; no se siguen episodios en el MVP.
 - **PROD-007:** Las listas compartidas forman parte del MVP y no publican valoraciones personales.
 - **PROD-008:** Los miembros pueden añadir y retirar títulos. El propietario administra los miembros y puede eliminar la lista.
-- **PROD-009:** Los re-visionados quedan fuera del MVP; se mantiene una entrada por título y usuario.
+- **PROD-009:** No hay entradas adicionales, historial ni contador de re-visionados en el MVP; una entrada por identidad y usuario.
 - **PROD-010:** No se filtran títulos por suscripciones a servicios de streaming.
 - **PROD-011:** TMDB es la fuente externa de películas y series. Los rankings no se presentan como rankings oficiales de FilmAffinity.
 - **PROD-012:** El registro es mediante invitación; se incluyen recuperación de contraseña y sesiones seguras. Mailpit está aprobado para desarrollo local y los tests usan remitente simulado; un proveedor de correo remoto sigue pendiente.
@@ -178,3 +178,17 @@ PROD-011 y ADR-002 fijan TMDB como fuente externa de películas y series, consum
 - Compatibilidad de la normalización y la caché con la prohibición de «derivados».
 - Redacción, ubicación y logos exactos de la atribución (los términos exigen el aviso de forma destacada; la FAQ menciona una sección «About»/créditos); verificar la versión vigente al implementar WEB-CATALOG-001.
 - Si TMDB-TERMS-001 debe cerrarse antes de iniciar TMDB-API-001 o solo antes de usar credenciales reales fuera de desarrollo y de producción (ver `docs/TASKS.md`).
+
+## LIBRARY-001 — Decisiones aprobadas para la biblioteca personal
+
+**Estado: APROBADO**
+
+- Películas y series comparten `PENDING`, `WATCHING`, `COMPLETED` y `ABANDONED`; el valor inicial es `PENDING`.
+- Se permite cambiar entre estados, incluido `COMPLETED → WATCHING`. No crea otra entrada ni historial; al completar otra vez se actualiza `completedAt`.
+- Al entrar en `COMPLETED`, `completedAt` se establece; al salir, se limpia. La base de datos restringe su coherencia con el estado.
+- `isFavorite` es independiente del estado y por defecto `false`.
+- La identidad única es `(source, type, tmdbId)`; cada usuario tiene como máximo una entrada por identidad.
+- La biblioteca no exige TMDB ni copia metadatos editoriales. Una respuesta puede incluir `media: null`.
+- La preferencia grid/list se almacena en `localStorage`, no en PostgreSQL.
+- Filtros MVP: tipo, estado y favoritos. Orden MVP: fecha de alta o actualización, con desempate estable por ID.
+- Estas decisiones precisan PROD-009: se excluyen el historial, los contadores y las entradas de re-visionado; la transición de estado descrita sí está permitida.

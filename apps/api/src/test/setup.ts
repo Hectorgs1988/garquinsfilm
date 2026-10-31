@@ -1,12 +1,22 @@
 const testDatabaseUrl = process.env.AUTH_TEST_DATABASE_URL;
-const integrationTestsEnabled = process.env.RUN_AUTH_INTEGRATION_TESTS === '1';
+const libraryTestDatabaseUrl = process.env.LIBRARY_TEST_DATABASE_URL;
+const authIntegrationTestsEnabled = process.env.RUN_AUTH_INTEGRATION_TESTS === '1';
+const libraryIntegrationTestsEnabled = process.env.RUN_LIBRARY_INTEGRATION_TESTS === '1';
+const integrationTestsEnabled = authIntegrationTestsEnabled || libraryIntegrationTestsEnabled;
 
 if (integrationTestsEnabled) {
-  if (!testDatabaseUrl) {
-    throw new Error('AUTH_TEST_DATABASE_URL is required when RUN_AUTH_INTEGRATION_TESTS=1.');
+  const isolatedTestDatabaseUrl = libraryIntegrationTestsEnabled
+    ? libraryTestDatabaseUrl
+    : testDatabaseUrl;
+  if (!isolatedTestDatabaseUrl) {
+    throw new Error(
+      libraryIntegrationTestsEnabled
+        ? 'LIBRARY_TEST_DATABASE_URL is required when RUN_LIBRARY_INTEGRATION_TESTS=1.'
+        : 'AUTH_TEST_DATABASE_URL is required when RUN_AUTH_INTEGRATION_TESTS=1.',
+    );
   }
 
-  const databaseUrl = new URL(testDatabaseUrl);
+  const databaseUrl = new URL(isolatedTestDatabaseUrl);
   const databaseName = decodeURIComponent(databaseUrl.pathname.slice(1));
   if (
     databaseUrl.protocol !== 'postgresql:' ||
@@ -18,7 +28,7 @@ if (integrationTestsEnabled) {
     );
   }
 
-  process.env.DATABASE_URL = testDatabaseUrl;
+  process.env.DATABASE_URL = isolatedTestDatabaseUrl;
 } else {
   process.env.DATABASE_URL ??=
     'postgresql://auth_test:auth_test@127.0.0.1:65432/garquinsfilm_auth_test?schema=public';

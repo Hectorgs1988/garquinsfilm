@@ -49,9 +49,10 @@ Catálogo TMDB (ADR-007: React → Fastify → TMDB, caché en memoria, contrato
 
 Dependencias y criterios en `docs/TASKS.md`. Cada tarea va en su rama `feature/*` con PR a `develop`. TMDB-TERMS-001 sigue pendiente.
 
-- Biblioteca personal sin duplicados; valoraciones solo para títulos guardados (pendientes; requieren el catálogo).
+- Biblioteca personal sin duplicados; funciona con la identidad externa aunque no haya metadatos de catálogo. Valoraciones solo para títulos guardados.
 - Nota 0,0–10,0 en incrementos de 0,1, favoritos, filtros y orden.
-- Sin re-visionados en el MVP.
+- Estados comunes para películas y series: pendiente, viendo, completado y abandonado; se permiten transiciones entre ellos.
+- Sin entradas adicionales, historial ni contadores de visionados en el MVP.
 
 **Demo:** dos usuarios guardan el mismo título y gestionan estados y valoraciones independientes.
 
@@ -75,4 +76,4 @@ Dependencias y criterios en `docs/TASKS.md`. Cada tarea va en su rama `feature/*
 
 ## Después del MVP
 
-Seguimiento de episodios, re-visionados, estadísticas avanzadas, recomendaciones (revisar licencias), «Sorpréndeme», notificaciones, importaciones y app nativa si se justifica.
+Seguimiento de episodios, historial/contadores de visionados, estadísticas avanzadas, recomendaciones (revisar licencias), «Sorpréndeme», notificaciones, importaciones y app nativa si se justifica.

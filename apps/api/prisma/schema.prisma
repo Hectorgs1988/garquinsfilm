@@ -20,23 +20,71 @@ enum InvitationStatus {
   CONSUMED
 }
 
+enum MediaSource {
+  tmdb
+}
+
+enum MediaType {
+  movie
+  tv
+}
+
+enum LibraryEntryStatus {
+  PENDING
+  WATCHING
+  COMPLETED
+  ABANDONED
+}
+
 model User {
-  id                 String       @id
+  id                 String         @id
   name               String
   email              String
-  emailVerified      Boolean      @default(false)
+  emailVerified      Boolean        @default(false)
   image              String?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-  role               GlobalRole   @default(user)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  role               GlobalRole     @default(user)
   sessions           Session[]
   accounts           Account[]
-  invitationsCreated Invitation[] @relation("InvitationCreator")
-  invitationAccepted Invitation?  @relation("InvitationConsumer")
-  auditEvents        AuditEvent[] @relation("AuditActor")
+  invitationsCreated Invitation[]   @relation("InvitationCreator")
+  invitationAccepted Invitation?    @relation("InvitationConsumer")
+  auditEvents        AuditEvent[]   @relation("AuditActor")
+  libraryEntries     LibraryEntry[]
 
   @@unique([email])
   @@map("user")
+}
+
+model Media {
+  id             String         @id @default(cuid())
+  source         MediaSource
+  type           MediaType
+  tmdbId         Int
+  libraryEntries LibraryEntry[]
+
+  @@unique([source, type, tmdbId])
+  @@map("media")
+}
+
+model LibraryEntry {
+  id          String             @id @default(cuid())
+  userId      String
+  mediaId     String
+  status      LibraryEntryStatus @default(PENDING)
+  isFavorite  Boolean            @default(false)
+  addedAt     DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  completedAt DateTime?
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media       Media              @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, mediaId])
+  @@index([userId, addedAt])
+  @@index([userId, updatedAt])
+  @@index([userId, status])
+  @@index([userId, isFavorite])
+  @@map("library_entry")
 }
 
 model Session {

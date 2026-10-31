@@ -8,8 +8,8 @@
 - **Verification:** registros temporales gestionados por Better Auth. Los tokens de recuperación caducan en una hora y se consumen una sola vez. No exigir verificación adicional del email después de aceptar una invitación válida.
 - **Invitation (implementado):** id, email normalizado, `tokenHash`, `status`, `expiresAt`, `createdByUserId`, `consumedAt`, `consumedUserId` y `revokedAt`. `status` recorre `PENDING_DELIVERY → ACTIVE → CONSUMED`, con estados terminales `DELIVERY_FAILED` y `REVOKED`. Solo se persiste SHA-256 de un token aleatorio de 32 bytes; caduca a los 7 días. Solo `admin` puede emitir, listar y revocar; la aceptación exige estado `ACTIVE` y crea usuario/cuenta credential en una transacción atómica.
 - **AuditEvent (implementado):** acción, actor opcional, id de objetivo opcional y fecha; no contiene token, contraseña ni correo de invitación.
-- **Media:** id, provider=`tmdb`, external_id, type=`movie|tv`, metadata cache?, updated_at. **Unique(provider, type, external_id)**. _Diseño futuro:_ no existe modelo Prisma ni migración para TMDB-001 (ADR-007); el catálogo se consulta bajo demanda. `Media` solo se creará con la biblioteca (LIB-001), con referencia estable `provider='tmdb'` + `type` + `external_id` y, como mucho, una caché mínima sujeta al límite de 6 meses.
-- **LibraryEntry:** id, user_id, media_id, status, is_favorite, added_at, watched_at?, updated_at. **Unique(user_id, media_id)**.
+- **Media (biblioteca):** id, `source=tmdb`, `type=movie|tv`, `tmdbId` entero positivo. **Unique(source, type, tmdbId)**. Solo mantiene la identidad externa; no persiste metadatos editoriales ni depende de TMDB.
+- **LibraryEntry:** id, user_id, media_id, `status=PENDING|WATCHING|COMPLETED|ABANDONED`, `is_favorite`, `added_at`, `updated_at`, `completed_at?`. **Unique(user_id, media_id)**. User se elimina en cascada; Media usa `RESTRICT`.
 - **Rating:** library_entry_id único, score (decimal(3,1)), comment?, updated_at. La valoración pertenece a una entrada de biblioteca; score entre 0,0 y 10,0 en incrementos de 0,1.
 - **SeasonProgress:** id, user_id, series_media_id, season_number, watched, watched_at?. **Unique(user_id, series_media_id, season_number)**. Sólo aplica a `type=tv`.
 - **SharedList:** id, owner_id, name, description?, created_at, updated_at.
@@ -24,17 +24,21 @@
 - La aceptación de invitación comprueba email normalizado, hash, caducidad y estado `ACTIVE`; la transición a `CONSUMED` y la creación de usuario/cuenta son atómicas y excluyen consumo concurrente.
 - Una invitación solo pasa de `PENDING_DELIVERY` a `ACTIVE` después de que el servidor SMTP acepte al destinatario y PostgreSQL confirme la activación. Si PostgreSQL falla antes de confirmar, la API devuelve un error controlado y la invitación permanece no utilizable, excepto cuando el commit sí se confirmó y solo se perdió la respuesta. No hay reintentos automáticos. Tras recuperar PostgreSQL, un administrador consulta el estado: `ACTIVE` conserva la invitación enviada; `PENDING_DELIVERY` o `DELIVERY_FAILED` se revoca manualmente antes de emitir una invitación nueva. El token anterior nunca se reactiva ni reutiliza.
 - La propiedad/rol de miembro en una lista no confiere ni requiere un rol global concreto.
-- El estado depende del tipo de medio. Película: `pending|watched`; serie: `pending|watching|completed|dropped`.
+- Películas y series usan los mismos estados `PENDING|WATCHING|COMPLETED|ABANDONED`; el estado inicial es `PENDING`.
+- `completedAt` es obligatorio si y solo si el estado es `COMPLETED`. Entrar en ese estado asigna la fecha; salir la limpia; volver a completado después asigna una fecha nueva. La base de datos y el servicio hacen cumplir la coherencia.
+- Favoritos son independientes del estado. Cambiar estado no cambia `isFavorite`.
 - Una valoración solo puede existir para un título presente en la biblioteca personal; su unicidad se deriva de la entrada única por usuario y medio.
 - El valor de una nota tiene un decimal y está en el rango inclusivo 0,0–10,0.
-- No se registran re-visionados ni múltiples entradas del mismo medio para el mismo usuario en el MVP.
+- No se crea otra entrada, historial ni contador al volver a ver un contenido; cambiar de `COMPLETED` a `WATCHING` está permitido y una nueva transición a `COMPLETED` actualiza `completedAt`.
 - El progreso de series se computa sobre temporadas normales; temporada 0/especiales se excluyen del denominador.
 - Los miembros pueden añadir y retirar títulos de una lista; solo el propietario gestiona miembros y elimina la lista.
 - Las operaciones de listas requieren control de acceso en backend.
 - La eliminación de un usuario/lista requiere reglas explícitas de retención y borrado, todavía pendientes.
 - El identificador externo numérico por sí solo no identifica un título: incluir siempre `type`.
 - La metadata TMDB no es propiedad del usuario y su caché está sujeta a las condiciones del servicio.
-- **Separación de datos del catálogo (ADR-007):** (1) _metadatos externos de TMDB_ (título, sinopsis, imágenes, votos): temporales, en caché en memoria con TTL y nunca fuente de verdad propia; (2) _identificador externo estable_: `source/provider='tmdb'` + `type` + `tmdbId`, único dato de TMDB que las futuras entidades referencian; (3) _datos propios de GarquinsFilm_: biblioteca, valoraciones, progreso y listas, que no dependen de que TMDB esté disponible; (4) bibliotecas, puntuaciones y listas futuras (LIB-001, RATING-001, LIST-001) referencian la identidad del punto 2 mediante `Media`, no copian el catálogo.
+- **Separación de datos del catálogo (ADR-007 y LIBRARY-001):** (1) _metadatos externos de TMDB_ no son fuente de verdad propia; (2) `source='tmdb'` + `type` + `tmdbId` identifica el contenido; (3) la biblioteca y otros datos propios no dependen de TMDB; (4) biblioteca, valoraciones y listas referencian `Media` y no copian el catálogo. Las respuestas permiten `media: null`.
+- La preferencia grid/list pertenece al cliente y se guarda en `localStorage`; no se modela en PostgreSQL ni tiene endpoint.
+- Índices de biblioteca: `(user_id, added_at)`, `(user_id, updated_at)`, `(user_id, status)` y `(user_id, is_favorite)`.
 - No se persiste el catálogo completo de TMDB. La caché de TMDB (memoria o, en el futuro, `Media.metadata`) debe expirar y no superar el máximo oficial de 6 meses; el MVP usa TTL de minutos a horas en memoria (`docs/API_INTEGRATION.md`).
 - Las ausencias de TMDB (imágenes, fechas, votos) se representan como `null`; una puntuación ausente nunca se almacena ni muestra como 0.
 
