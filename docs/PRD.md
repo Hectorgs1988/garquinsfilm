@@ -32,14 +32,15 @@ Descubrir títulos, guardar lo que se quiere ver, registrar lo ya visto y compar
 
 ### 3. Biblioteca personal y valoraciones
 
-- Películas: **pendiente** o **vista**.
-- Series: **pendiente**, **viendo**, **terminada** o **abandonada**.
-- No se admiten re-visionados en el MVP: existe una única entrada por título y usuario.
+- Películas y series comparten los estados **pendiente**, **viendo**, **completado** y **abandonado**. El estado inicial es pendiente.
+- Existe una única entrada por identidad externa (`source + type + tmdbId`) y usuario. No se guarda historial ni contador de visionados; volver de completado a viendo y completar de nuevo actualiza `completedAt`, no crea otra entrada.
 - Para valorar un título, debe estar en la biblioteca personal.
 - Nota personal opcional entre **0,0 y 10,0** inclusive, en incrementos de **0,1**; comentario opcional.
-- Favoritos y fecha de visionado opcional; edición/eliminación de entradas.
-- Filtros por tipo, estado, género y favoritos; orden por nota, año, fecha de guardado y fecha vista.
+- Favoritos independientes del estado; al entrar en completado se registra `completedAt` y se limpia al salir.
+- Edición/eliminación de entradas.
+- Filtros por tipo, estado y favoritos; orden por fecha de alta o actualización. La vista grid/list se recuerda en `localStorage`, no en el servidor.
 - No se permiten duplicados del mismo título en una biblioteca personal.
+- La biblioteca no depende de la disponibilidad de TMDB. Los metadatos pueden faltar; la API permite `media: null` y no copia títulos, imágenes, sinopsis ni puntuaciones en PostgreSQL.
 
 ### 4. Seguimiento de temporadas
 
@@ -79,7 +80,7 @@ Descubrir títulos, guardar lo que se quiere ver, registrar lo ya visto y compar
 
 ## Fuera del MVP
 
-Seguimiento por episodio, re-visionados, integración con cuentas de streaming, filtro por suscripciones, importación FilmAffinity, redes sociales públicas, app móvil nativa, push, estadísticas avanzadas e IA generativa.
+Seguimiento por episodio, historial/contadores de visionados, integración con cuentas de streaming, filtro por suscripciones, importación FilmAffinity, redes sociales públicas, app móvil nativa, push, estadísticas avanzadas e IA generativa.
 
 ## Aceptación transversal
 

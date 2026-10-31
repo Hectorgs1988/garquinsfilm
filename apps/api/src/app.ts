@@ -12,12 +12,15 @@ import { getDatabase } from './db/client.js';
 import type { DatabaseHealth } from './db/database.js';
 import healthRoute from './routes/health.js';
 import catalogRoutes from './catalog/catalog.routes.js';
+import libraryRoutes from './library/library.routes.js';
+import type { LibraryRepository } from './library/library.service.js';
 
 interface BuildAppOptions {
   database?: DatabaseHealth;
   invitationDelivery?: InvitationDelivery;
   auth?: AuthRuntime;
   tmdbClient?: TmdbClient;
+  libraryRepository?: LibraryRepository;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -30,7 +33,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(cors, {
     origin: trustedOrigins,
     credentials: true,
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
   app.register(rateLimit, {
@@ -44,6 +47,10 @@ export function buildApp(options: BuildAppOptions = {}) {
   });
   app.register(catalogRoutes, {
     auth: options.auth,
+  });
+  app.register(libraryRoutes, {
+    auth: options.auth,
+    repository: options.libraryRepository,
   });
 
   app.register(healthRoute, { database });

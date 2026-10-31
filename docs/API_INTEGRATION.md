@@ -305,3 +305,27 @@ Referencias técnicas consultadas el 2026-10-25 (solo documentación, sin llamad
 [detalle movie](https://developer.themoviedb.org/reference/movie-details),
 [detalle tv](https://developer.themoviedb.org/reference/tv-series-details),
 [proveedores y atribución JustWatch](https://developer.themoviedb.org/reference/movie-watch-providers).
+
+## Biblioteca personal (LIBRARY-002)
+
+La API de biblioteca no consulta TMDB y no depende de que el catálogo esté disponible. La identidad persistida es
+`{ source: 'tmdb', type: 'movie' | 'tv', tmdbId }`; las respuestas pueden incluir `media: null`.
+Todas las rutas requieren una sesión Better Auth y aíslan por el `userId` de esa sesión.
+Las respuestas privadas llevan `Cache-Control: private, no-store`.
+
+| Método | Ruta | Resultado |
+| --- | --- | --- |
+| `POST` | `/api/library` | Crea una entrada (`201`), duplicado propio `409`. |
+| `GET` | `/api/library` | Lista paginada; filtros `type`, `status`, `favorite`; orden `addedAt|updatedAt` y `asc|desc`, desempate estable por ID. Página inicial 1, tamaño 20, máximo 100. |
+| `GET` | `/api/library/:id` | Lee una entrada propia; ausente o ajena `404`. |
+| `PATCH` | `/api/library/:id` | Modifica solo `status` e `isFavorite`; cuerpo vacío o propiedades adicionales `400`. |
+| `DELETE` | `/api/library/:id` | Elimina la entrada propia (`204`); no elimina el registro compartido `Media`; ausente o ajena `404`. |
+
+`LibraryEntryStatus`: `PENDING`, `WATCHING`, `COMPLETED`, `ABANDONED`. El estado inicial es `PENDING`.
+`isFavorite` es independiente. `completedAt` se establece al entrar en `COMPLETED`, se limpia al salir
+y se renueva al volver a completado. No se guardan historial ni contadores de visionados.
+Restricciones de PostgreSQL garantizan `tmdbId > 0`, unicidad `(source,type,tmdbId)` en `Media`,
+unicidad `(userId,mediaId)` en `LibraryEntry` y coherencia de `completedAt`.
+La suite de integración `pnpm --filter @garquinsfilm/api test:library:integration` requiere
+`LIBRARY_TEST_DATABASE_URL` apuntando a PostgreSQL de loopback con nombre terminado en `_test`;
+no ejecuta migraciones automáticamente.
