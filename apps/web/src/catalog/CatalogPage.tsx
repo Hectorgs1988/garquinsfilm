@@ -27,6 +27,7 @@ export function CatalogPage({ onUnauthorized }: { onUnauthorized?: () => void } 
   if (selectedMedia) {
     return (
       <MediaDetailPage
+        key={`${selectedMedia.type}-${selectedMedia.tmdbId}`}
         media={getDemoMediaDetail(selectedMedia) ?? selectedMedia}
         onBack={() => setSelectedMedia(null)}
         isDemo

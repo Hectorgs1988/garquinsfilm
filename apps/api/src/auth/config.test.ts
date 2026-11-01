@@ -59,6 +59,27 @@ describe('getAuthConfig', () => {
     ).toBe(true);
   });
 
+  it('allows an explicit LAN origin in development but not non-HTTPS origins in production', () => {
+    const lan = 'http://192.168.1.13:5173';
+    expect(
+      getAuthConfig({
+        ...validEnvironment,
+        BETTER_AUTH_TRUSTED_ORIGINS: `${validEnvironment.BETTER_AUTH_TRUSTED_ORIGINS},${lan}`,
+      }).trustedOrigins,
+    ).toEqual(expect.arrayContaining([lan, 'http://localhost:5173']));
+    expect(() =>
+      getAuthConfig({
+        ...validEnvironment,
+        BETTER_AUTH_URL: 'https://api.example.test',
+        BETTER_AUTH_TRUSTED_ORIGINS: `https://web.example.test,${lan}`,
+        WEB_APP_URL: 'https://web.example.test',
+        SMTP_HOST: 'smtp.example.test',
+        EMAIL_FROM: 'GarquinsFilm <no-reply@example.test>',
+        NODE_ENV: 'production',
+      }),
+    ).toThrow('only contain HTTPS origins in production');
+  });
+
   it('requires trusted application and valid SMTP settings', () => {
     expect(() =>
       getAuthConfig({

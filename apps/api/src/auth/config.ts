@@ -63,6 +63,13 @@ export function getAuthConfig(environment: AuthEnvironment = process.env): AuthC
     throw new Error('WEB_APP_URL must use HTTPS in production.');
   }
 
+  if (secureCookies) {
+    const insecureOrigin = [...trustedOrigins].find((origin) => !origin.startsWith('https://'));
+    if (insecureOrigin) {
+      throw new Error('BETTER_AUTH_TRUSTED_ORIGINS must only contain HTTPS origins in production.');
+    }
+  }
+
   const smtpPort = parsePort(environment.SMTP_PORT);
   const smtpSecure = parseBoolean(environment.SMTP_SECURE, 'SMTP_SECURE');
   const smtpHost =

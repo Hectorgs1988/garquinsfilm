@@ -37,3 +37,5 @@ if (integrationTestsEnabled) {
 process.env.BETTER_AUTH_SECRET ??= 'test-only-better-auth-secret-not-for-any-deployment';
 process.env.BETTER_AUTH_URL ??= 'http://127.0.0.1:3001';
 process.env.BETTER_AUTH_TRUSTED_ORIGINS ??= 'http://127.0.0.1:5173';
+// Prevents a developer's local .env (e.g. a LAN origin) from changing test expectations.
+process.env.WEB_APP_URL ??= 'http://127.0.0.1:5173';
