@@ -7,6 +7,7 @@ vi.mock('../api.js', () => ({ request }));
 import {
   createLibraryEntry,
   deleteLibraryEntry,
+  findLibraryEntryForMedia,
   listLibrary,
   updateLibraryEntry,
 } from './library.api.js';
@@ -30,6 +31,29 @@ describe('library API client', () => {
 
     expect(request).toHaveBeenCalledWith(
       '/api/library?page=2&pageSize=20&sortBy=updatedAt&sortOrder=asc&type=tv&status=WATCHING&favorite=true',
+      { method: 'GET', signal: undefined },
+    );
+  });
+
+  it('busca una identidad de catálogo en las páginas filtradas por tipo', async () => {
+    const entry = {
+      id: 'entry-2',
+      source: 'tmdb',
+      type: 'tv',
+      tmdbId: 99,
+    };
+    request
+      .mockResolvedValueOnce({ results: [], totalPages: 2 })
+      .mockResolvedValueOnce({ results: [entry], totalPages: 2 });
+    expect(await findLibraryEntryForMedia('tv', 99)).toEqual(entry);
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      '/api/library?page=1&pageSize=100&sortBy=addedAt&sortOrder=desc&type=tv',
+      { method: 'GET', signal: undefined },
+    );
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      '/api/library?page=2&pageSize=100&sortBy=addedAt&sortOrder=desc&type=tv',
       { method: 'GET', signal: undefined },
     );
   });

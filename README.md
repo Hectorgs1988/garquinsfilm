@@ -75,6 +75,17 @@ El servicio solo publica el puerto en `127.0.0.1`. Sus valores configurables son
 
 Los valores de `.env.example` son exclusivamente ejemplos de desarrollo; cambia la contraseña local antes de usar la base. `.env` está excluido de Git. La imagen aplica estas variables al inicializar un directorio de datos vacío; cambiarlas después no modifica usuarios o contraseñas ya inicializados en el volumen.
 
+### Acceso desde un móvil en la red local (solo desarrollo)
+
+La API rechaza con `403` cualquier cabecera `Origin` que no figure en `BETTER_AUTH_TRUSTED_ORIGINS` (también aplica a CORS). Para probar desde un teléfono, añade explícitamente el origen LAN de tu Mac en tu `.env` local (sin comodines, sin cambiar `.env.example`) y reinicia la API:
+
+```bash
+BETTER_AUTH_TRUSTED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173,http://192.168.1.13:5173
+WEB_APP_URL=http://192.168.1.13:5173   # para que los enlaces de recuperación abran la IP LAN en el móvil
+```
+
+Vite debe escuchar en la red (`pnpm --filter @garquinsfilm/web exec vite --host`). Si cambia la IP del Mac, actualiza la variable. En producción la API rechaza orígenes de confianza que no sean HTTPS.
+
 ## Mailpit local
 
 Mailpit captura mensajes de prueba en la máquina local y no los envía a Internet. La imagen oficial `axllent/mailpit:v1.31.6` queda fijada en Compose. La interfaz web y SMTP se publican exclusivamente en `127.0.0.1`; sus puertos host configurables son `MAILPIT_WEB_PORT` (por defecto `8025`) y `MAILPIT_SMTP_PORT` (por defecto `1025`). No requiere credenciales SMTP para las pruebas locales. La API usa un adaptador SMTP genérico configurable por `SMTP_*`; no depende de Mailpit como proveedor en el código.

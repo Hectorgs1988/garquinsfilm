@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MovieDetail, TvDetail } from '@garquinsfilm/shared';
+import type { LibraryEntryView, MovieDetail, TvDetail } from '@garquinsfilm/shared';
 
 import { DEMO_DETAILS } from './catalog.mock.js';
 import { MediaDetailPage } from './MediaDetailPage.js';
@@ -9,26 +9,49 @@ import { ApiError } from '../api.js';
 
 const libraryApi = vi.hoisted(() => ({
   createLibraryEntry: vi.fn(),
+  findLibraryEntryForMedia: vi.fn(),
 }));
 
 vi.mock('../library/library.api.js', () => libraryApi);
+const ratingsApi = vi.hoisted(() => ({
+  getRating: vi.fn(),
+  putRating: vi.fn(),
+  deleteRating: vi.fn(),
+}));
+vi.mock('../ratings/ratings.api.js', () => ratingsApi);
 
 const movie = DEMO_DETAILS.find((item) => item.type === 'movie') as MovieDetail;
 const tv = DEMO_DETAILS.find((item) => item.type === 'tv') as TvDetail;
+const libraryEntry: LibraryEntryView = {
+  id: 'entry-1',
+  source: 'tmdb',
+  type: 'movie',
+  tmdbId: movie.tmdbId,
+  status: 'PENDING',
+  isFavorite: false,
+  addedAt: '2026-10-29T12:00:00.000Z',
+  updatedAt: '2026-10-29T12:00:00.000Z',
+  completedAt: null,
+  media: null,
+};
 
 afterEach(cleanup);
 
 describe('MediaDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    libraryApi.findLibraryEntryForMedia.mockResolvedValue(null);
+    ratingsApi.getRating.mockResolvedValue(null);
   });
 
   it('añade solo la identidad al backend y representa estado inicial y duplicado', async () => {
     libraryApi.createLibraryEntry.mockResolvedValueOnce({});
     render(<MediaDetailPage media={movie} onBack={vi.fn()} isDemo />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Añadir a mi biblioteca' }));
-    expect(await screen.findByText('Se añadió con estado Pendiente.')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Añadir a mi biblioteca' }));
+    expect(
+      await screen.findByText('Se añadió a tu biblioteca. Estado inicial: Pendiente.'),
+    ).toBeTruthy();
     expect(libraryApi.createLibraryEntry).toHaveBeenCalledWith({
       source: 'tmdb',
       type: 'movie',
@@ -39,13 +62,14 @@ describe('MediaDetailPage', () => {
     libraryApi.createLibraryEntry.mockRejectedValueOnce(
       new ApiError(409, 'This title is already in your library.'),
     );
+    libraryApi.findLibraryEntryForMedia
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(libraryEntry);
     render(<MediaDetailPage media={movie} onBack={vi.fn()} isDemo />);
-    fireEvent.click(screen.getByRole('button', { name: 'Añadir a mi biblioteca' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Añadir a mi biblioteca' }));
 
-    expect(await screen.findByRole('button', { name: 'Ya está en mi biblioteca' })).toBeTruthy();
-    expect(
-      screen.getByText('Este título ya estaba añadido; no se creó un duplicado.'),
-    ).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Puntuar y reseñar' })).toBeTruthy();
+    expect(screen.getByText('Este título ya está en tu biblioteca.')).toBeTruthy();
   });
 
   it('evita múltiples POST al pulsar rápidamente el botón de alta', async () => {
@@ -58,14 +82,16 @@ describe('MediaDetailPage', () => {
     );
     render(<MediaDetailPage media={movie} onBack={vi.fn()} isDemo />);
 
-    const addButton = screen.getByRole('button', { name: 'Añadir a mi biblioteca' });
+    const addButton = await screen.findByRole('button', { name: 'Añadir a mi biblioteca' });
     fireEvent.click(addButton);
     fireEvent.click(addButton);
 
     expect(libraryApi.createLibraryEntry).toHaveBeenCalledOnce();
     expect(addButton.hasAttribute('disabled')).toBe(true);
     resolveCreate?.({});
-    expect(await screen.findByText('Se añadió con estado Pendiente.')).toBeTruthy();
+    expect(
+      await screen.findByText('Se añadió a tu biblioteca. Estado inicial: Pendiente.'),
+    ).toBeTruthy();
   });
 
   it('renderiza metadatos de película, reparto, dirección y disponibilidad ficticia', () => {
@@ -86,6 +112,18 @@ describe('MediaDetailPage', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText(/Atribución: JustWatch/)).toBeTruthy();
+  });
+
+  it('muestra la media TMDB separada y permite abrir la valoración solo desde la biblioteca', async () => {
+    libraryApi.findLibraryEntryForMedia.mockResolvedValueOnce(libraryEntry);
+    render(<MediaDetailPage media={movie} onBack={vi.fn()} isDemo />);
+    expect(await screen.findByRole('button', { name: 'Puntuar y reseñar' })).toBeTruthy();
+    expect(screen.getByText(/Media TMDB:/)).toBeTruthy();
+    expect(screen.getByText('Tu puntuación: Sin puntuación')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Puntuar y reseñar' }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(ratingsApi.getRating).toHaveBeenCalledWith(libraryEntry.id);
+    expect(ratingsApi.getRating).toHaveBeenCalledOnce();
   });
 
   it('renderiza temporadas de series y reconoce los especiales de temporada cero', () => {

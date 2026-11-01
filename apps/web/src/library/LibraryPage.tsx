@@ -8,11 +8,14 @@ import {
   type LibrarySortBy,
   type LibrarySortOrder,
   type MediaType,
+  type RatingView,
 } from '@garquinsfilm/shared';
 
 import { ApiError } from '../api.js';
 import { LibraryEntryCard } from './LibraryEntryCard.js';
 import { deleteLibraryEntry, listLibrary, updateLibraryEntry } from './library.api.js';
+import { RatingDialog } from '../ratings/RatingDialog.js';
+import { getRating } from '../ratings/ratings.api.js';
 
 const VIEW_STORAGE_KEY = 'garquinsfilm:library-view';
 const PAGE_SIZE = 20;
@@ -69,6 +72,18 @@ function getErrorMessage(error: unknown, action: 'load' | 'update' | 'delete'): 
     : 'No se pudo guardar el cambio. Inténtalo de nuevo.';
 }
 
+function getRatingErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 401) return 'Tu sesión ha caducado. Vuelve a iniciar sesión.';
+    if (error.status === 404) return 'La entrada ya no está disponible en tu biblioteca.';
+    if (error.status === 429) return 'Demasiadas consultas de valoraciones. Espera un minuto.';
+    if (error.status === 503)
+      return 'El servicio no está disponible ahora. Inténtalo de nuevo más tarde.';
+    if (error.status === 0) return 'No se pudo conectar con el servidor. Comprueba tu conexión.';
+  }
+  return 'No se pudo cargar tu valoración. Abre el editor para volver a intentarlo.';
+}
+
 export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) {
   const [view, setView] = useState<ViewMode>(readViewPreference);
   const [filters, setFilters] = useState<Filters>({
@@ -87,6 +102,11 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
   const pendingIdsRef = useRef(new Set<string>());
   const [deleteTarget, setDeleteTarget] = useState<LibraryEntryView | null>(null);
+  const [ratingTarget, setRatingTarget] = useState<LibraryEntryView | null>(null);
+  const [ratings, setRatings] = useState<Record<string, RatingView | null>>({});
+  const [ratingErrors, setRatingErrors] = useState<Record<string, string>>({});
+  const [ratingLoadingIds, setRatingLoadingIds] = useState<Set<string>>(() => new Set());
+  const requestedRatingIds = useRef(new Set<string>());
   const [refreshKey, setRefreshKey] = useState(0);
   const [reloadKey, setReloadKey] = useState(0);
   const query = useMemo(() => toListQuery(filters, page), [filters, page]);
@@ -218,6 +238,11 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     setActionNotice('');
     try {
       await deleteLibraryEntry(target.id);
+      setRatings((current) => {
+        const next = { ...current };
+        delete next[target.id];
+        return next;
+      });
       setActionNotice('La entrada se eliminó de tu biblioteca.');
       previousFocusRef.current = libraryHeadingRef.current;
       setDeleteTarget(null);
@@ -244,6 +269,42 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const results = result?.results ?? [];
   const isFiltered =
     filters.type !== 'all' || filters.status !== 'all' || filters.favorite !== 'all';
+
+  useEffect(() => {
+    const entriesToLoad = results.filter(
+      (entry) => !Object.hasOwn(ratings, entry.id) && !requestedRatingIds.current.has(entry.id),
+    );
+    if (entriesToLoad.length === 0) return;
+
+    for (const entry of entriesToLoad) requestedRatingIds.current.add(entry.id);
+    setRatingLoadingIds((current) => new Set([...current, ...entriesToLoad.map(({ id }) => id)]));
+
+    for (const entry of entriesToLoad) {
+      void getRating(entry.id)
+        .then((rating) => {
+          setRatings((current) => ({ ...current, [entry.id]: rating }));
+          setRatingErrors((current) => {
+            const next = { ...current };
+            delete next[entry.id];
+            return next;
+          });
+        })
+        .catch((error: unknown) => {
+          if (error instanceof ApiError && error.status === 401) unauthorizedHandler.current();
+          setRatingErrors((current) => ({
+            ...current,
+            [entry.id]: getRatingErrorMessage(error),
+          }));
+        })
+        .finally(() => {
+          setRatingLoadingIds((current) => {
+            const next = new Set(current);
+            next.delete(entry.id);
+            return next;
+          });
+        });
+    }
+  }, [ratings, results]);
 
   return (
     <section aria-labelledby="library-title" className="space-y-6 sm:space-y-8">
@@ -456,6 +517,13 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
                   void changeEntry(current, { isFavorite: !current.isFavorite })
                 }
                 onRequestDelete={requestDelete}
+                rating={ratings[entry.id]}
+                ratingLoading={
+                  ratingLoadingIds.has(entry.id) ||
+                  (!Object.hasOwn(ratings, entry.id) && !ratingErrors[entry.id])
+                }
+                ratingError={ratingErrors[entry.id]}
+                onManageRating={setRatingTarget}
               />
             ))}
           </div>
@@ -546,6 +614,24 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             </div>
           </div>
         </div>
+      )}
+      {ratingTarget && (
+        <RatingDialog
+          key={ratingTarget.id}
+          entryId={ratingTarget.id}
+          title={ratingTarget.media?.title || 'Título no disponible'}
+          initialRating={ratings[ratingTarget.id]}
+          onClose={() => setRatingTarget(null)}
+          onUnauthorized={() => unauthorizedHandler.current()}
+          onRatingChange={(rating) => {
+            setRatings((current) => ({ ...current, [ratingTarget.id]: rating }));
+            setRatingErrors((current) => {
+              const next = { ...current };
+              delete next[ratingTarget.id];
+              return next;
+            });
+          }}
+        />
       )}
     </section>
   );

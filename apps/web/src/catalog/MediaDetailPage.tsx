@@ -1,8 +1,18 @@
-import { useRef, useState } from 'react';
-import type { MediaDetail, MediaSummary, MediaWatchProvider, TvSeason } from '@garquinsfilm/shared';
+import { useEffect, useRef, useState } from 'react';
+import type {
+  LibraryEntryView,
+  MediaDetail,
+  MediaSummary,
+  MediaWatchProvider,
+  RatingView,
+  TvSeason,
+} from '@garquinsfilm/shared';
 
 import { ApiError } from '../api.js';
-import { createLibraryEntry } from '../library/library.api.js';
+import { createLibraryEntry, findLibraryEntryForMedia } from '../library/library.api.js';
+import { RatingDialog } from '../ratings/RatingDialog.js';
+import { getRating } from '../ratings/ratings.api.js';
+import { SpoilerReview } from '../ratings/SpoilerReview.js';
 import { MediaCredits } from './MediaCredits.js';
 import { TrailerModal } from './TrailerModal.js';
 
@@ -63,8 +73,15 @@ export function MediaDetailPage({
   const [libraryState, setLibraryState] = useState<'idle' | 'loading' | 'added' | 'duplicate'>(
     'idle',
   );
+  const [libraryEntry, setLibraryEntry] = useState<LibraryEntryView | null>(null);
+  const [checkingLibrary, setCheckingLibrary] = useState(true);
+  const [ratingTarget, setRatingTarget] = useState(false);
+  const [personalRating, setPersonalRating] = useState<RatingView | null>(null);
+  const [ratingLoaded, setRatingLoaded] = useState(false);
+  const [ratingError, setRatingError] = useState('');
   const [libraryError, setLibraryError] = useState('');
   const addRequestInProgress = useRef(false);
+  const unauthorizedHandler = useRef(onUnauthorized);
   const detail = isMediaDetail(media) ? media : null;
   const isMovie = media.type === 'movie';
   const releaseDate =
@@ -82,25 +99,87 @@ export function MediaDetailPage({
     media.overview?.trim() || 'Todavía no tenemos una sinopsis disponible para este título.';
   const titleId = 'media-detail-title';
 
+  useEffect(() => {
+    unauthorizedHandler.current = onUnauthorized;
+  }, [onUnauthorized]);
+
+  async function loadExistingRating(entry: LibraryEntryView, signal?: AbortSignal) {
+    if (signal?.aborted) return;
+    setLibraryEntry(entry);
+    setLibraryState('duplicate');
+    setRatingLoaded(false);
+    setRatingError('');
+    try {
+      const currentRating = await getRating(entry.id);
+      if (signal?.aborted) return;
+      setPersonalRating(currentRating);
+      setRatingLoaded(true);
+    } catch (error) {
+      if (signal?.aborted) return;
+      if (error instanceof ApiError && error.status === 401) unauthorizedHandler.current?.();
+      setRatingError(
+        error instanceof ApiError && error.status === 0
+          ? 'No se pudo cargar tu valoración. Comprueba tu conexión.'
+          : 'No se pudo cargar tu valoración.',
+      );
+    }
+  }
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setCheckingLibrary(true);
+    setLibraryError('');
+    findLibraryEntryForMedia(media.type, media.tmdbId, controller.signal)
+      .then(async (entry) => {
+        if (entry) await loadExistingRating(entry, controller.signal);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        if (error instanceof ApiError && error.status === 401) unauthorizedHandler.current?.();
+        setLibraryError(
+          error instanceof ApiError && error.status === 0
+            ? 'No se pudo comprobar tu biblioteca. Comprueba tu conexión e inténtalo de nuevo.'
+            : 'No se pudo comprobar si el título está en tu biblioteca.',
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCheckingLibrary(false);
+      });
+    return () => controller.abort();
+  }, [media.type, media.tmdbId]);
+
   async function addToLibrary() {
     if (addRequestInProgress.current) return;
     addRequestInProgress.current = true;
     setLibraryState('loading');
     setLibraryError('');
     try {
-      await createLibraryEntry({
+      const created = await createLibraryEntry({
         source: media.source,
         type: media.type,
         tmdbId: media.tmdbId,
       });
+      setLibraryEntry(created);
+      setPersonalRating(null);
+      setRatingLoaded(true);
       setLibraryState('added');
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         setLibraryState('duplicate');
+        try {
+          const entry = await findLibraryEntryForMedia(media.type, media.tmdbId);
+          if (entry) await loadExistingRating(entry);
+          else setLibraryError('El título ya existe, pero no se pudo localizar en tu biblioteca.');
+        } catch (lookupError) {
+          if (lookupError instanceof ApiError && lookupError.status === 401) {
+            unauthorizedHandler.current?.();
+          }
+          setLibraryError('El título ya existe, pero no se pudo cargar desde tu biblioteca.');
+        }
         return;
       }
       if (error instanceof ApiError && error.status === 401) {
-        onUnauthorized?.();
+        unauthorizedHandler.current?.();
         setLibraryError('Tu sesión ha caducado. Vuelve a iniciar sesión.');
       } else if (error instanceof ApiError && error.status === 0) {
         setLibraryError('No se pudo conectar con el servidor. Comprueba tu conexión.');
@@ -199,8 +278,26 @@ export function MediaDetailPage({
               {rating !== null && (
                 <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1.5 font-semibold text-amber-300">
                   <span aria-hidden="true">★</span>
-                  {rating}
+                  Media TMDB: {rating}
                   <span className="font-normal text-slate-400">/ 10</span>
+                </span>
+              )}
+              {libraryEntry && (
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/20 bg-red-950/30 px-2.5 py-1.5 font-semibold text-red-200">
+                  Tu puntuación:{' '}
+                  {!ratingLoaded
+                    ? 'Cargando…'
+                    : personalRating?.score === null || personalRating?.score === undefined
+                      ? 'Sin puntuación'
+                      : personalRating.score.toLocaleString('es-ES', {
+                          minimumFractionDigits: 1,
+                          maximumFractionDigits: 1,
+                        })}
+                  {ratingLoaded &&
+                    personalRating?.score !== null &&
+                    personalRating?.score !== undefined && (
+                      <span className="font-normal text-slate-400">/ 10</span>
+                    )}
                 </span>
               )}
               {media.voteCount !== null && (
@@ -239,32 +336,90 @@ export function MediaDetailPage({
 
             <TrailerModal video={detail?.trailer ?? null} title={media.title} />
             <div className="space-y-2 pt-1">
-              <button
-                type="button"
-                onClick={() => void addToLibrary()}
-                disabled={libraryState !== 'idle'}
-                aria-busy={libraryState === 'loading'}
-                className="min-h-12 cursor-pointer rounded-xl bg-red-800 px-5 text-sm font-semibold text-white transition-colors hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none"
-              >
-                {libraryState === 'loading'
-                  ? 'Añadiendo…'
-                  : libraryState === 'added'
-                    ? 'Añadido a mi biblioteca'
-                    : libraryState === 'duplicate'
-                      ? 'Ya está en mi biblioteca'
-                      : 'Añadir a mi biblioteca'}
-              </button>
-              {(libraryState === 'added' || libraryState === 'duplicate') && (
-                <p role="status" className="text-sm text-emerald-300">
-                  {libraryState === 'added'
-                    ? 'Se añadió con estado Pendiente.'
-                    : 'Este título ya estaba añadido; no se creó un duplicado.'}
-                </p>
+              {libraryEntry ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setRatingTarget(true)}
+                    className="min-h-12 cursor-pointer rounded-xl bg-red-800 px-5 text-sm font-semibold text-white transition-colors hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 motion-reduce:transition-none"
+                  >
+                    {!ratingLoaded
+                      ? 'Mi valoración'
+                      : personalRating
+                        ? 'Editar mi valoración'
+                        : 'Puntuar y reseñar'}
+                  </button>
+                  {ratingError && (
+                    <p role="alert" className="text-sm text-red-200">
+                      {ratingError}
+                    </p>
+                  )}
+                  {libraryState === 'added' && (
+                    <p role="status" className="text-sm text-emerald-300">
+                      Se añadió a tu biblioteca. Estado inicial: Pendiente.
+                    </p>
+                  )}
+                  {libraryState === 'duplicate' && (
+                    <p role="status" className="text-sm text-emerald-300">
+                      Este título ya está en tu biblioteca.
+                    </p>
+                  )}
+                  {personalRating?.review && (
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+                      <p className="mb-2 text-xs font-semibold text-slate-300">Tu reseña</p>
+                      <SpoilerReview
+                        key={`${personalRating.updatedAt}-${personalRating.review}`}
+                        review={personalRating.review}
+                        containsSpoilers={personalRating.containsSpoilers}
+                      />
+                    </div>
+                  )}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void addToLibrary()}
+                  disabled={checkingLibrary || libraryState !== 'idle'}
+                  aria-busy={checkingLibrary || libraryState === 'loading'}
+                  className="min-h-12 cursor-pointer rounded-xl bg-red-800 px-5 text-sm font-semibold text-white transition-colors hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none"
+                >
+                  {checkingLibrary
+                    ? 'Comprobando biblioteca…'
+                    : libraryState === 'loading'
+                      ? 'Añadiendo…'
+                      : libraryState === 'duplicate'
+                        ? 'Ya está en mi biblioteca'
+                        : 'Añadir a mi biblioteca'}
+                </button>
               )}
               {libraryError && (
                 <p role="alert" className="text-sm text-red-200">
                   {libraryError}
                 </p>
+              )}
+              {libraryError && !checkingLibrary && !libraryEntry && libraryState !== 'loading' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCheckingLibrary(true);
+                    setLibraryError('');
+                    void findLibraryEntryForMedia(media.type, media.tmdbId)
+                      .then(async (entry) => {
+                        if (entry) await loadExistingRating(entry);
+                        else setLibraryError('No se encontró la entrada en tu biblioteca.');
+                      })
+                      .catch((error: unknown) => {
+                        if (error instanceof ApiError && error.status === 401) {
+                          unauthorizedHandler.current?.();
+                        }
+                        setLibraryError('No se pudo comprobar tu biblioteca.');
+                      })
+                      .finally(() => setCheckingLibrary(false));
+                  }}
+                  className="min-h-11 rounded-lg border border-slate-600 px-4 text-sm font-semibold text-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300"
+                >
+                  Reintentar comprobación
+                </button>
               )}
             </div>
           </div>
@@ -288,6 +443,21 @@ export function MediaDetailPage({
             Aún no hay información ampliada para este título.
           </p>
         </section>
+      )}
+      {ratingTarget && libraryEntry && (
+        <RatingDialog
+          key={libraryEntry.id}
+          entryId={libraryEntry.id}
+          title={media.title}
+          initialRating={ratingLoaded ? personalRating : undefined}
+          onClose={() => setRatingTarget(false)}
+          onUnauthorized={() => unauthorizedHandler.current?.()}
+          onRatingChange={(currentRating) => {
+            setPersonalRating(currentRating);
+            setRatingLoaded(true);
+            setRatingError('');
+          }}
+        />
       )}
     </section>
   );

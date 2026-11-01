@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import type { LibraryEntryView, LibraryListQuery, LibraryListResponse } from '@garquinsfilm/shared';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type {
+  LibraryEntryView,
+  LibraryListQuery,
+  LibraryListResponse,
+  RatingView,
+} from '@garquinsfilm/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../api.js';
@@ -10,8 +15,14 @@ const libraryApi = vi.hoisted(() => ({
   updateLibraryEntry: vi.fn(),
   deleteLibraryEntry: vi.fn(),
 }));
+const ratingsApi = vi.hoisted(() => ({
+  getRating: vi.fn(),
+  putRating: vi.fn(),
+  deleteRating: vi.fn(),
+}));
 
 vi.mock('./library.api.js', () => libraryApi);
+vi.mock('../ratings/ratings.api.js', () => ratingsApi);
 
 import { LibraryPage } from './LibraryPage.js';
 
@@ -26,6 +37,14 @@ const entry: LibraryEntryView = {
   updatedAt: '2026-10-29T12:00:00.000Z',
   completedAt: null,
   media: null,
+};
+const savedRating: RatingView = {
+  libraryEntryId: entry.id,
+  score: 8.4,
+  review: 'Mi reseña',
+  containsSpoilers: false,
+  createdAt: '2026-10-29T12:00:00.000Z',
+  updatedAt: '2026-10-30T12:00:00.000Z',
 };
 
 function response(
@@ -52,6 +71,14 @@ beforeEach(() => {
   libraryApi.listLibrary.mockResolvedValue(response());
   libraryApi.updateLibraryEntry.mockResolvedValue(entry);
   libraryApi.deleteLibraryEntry.mockResolvedValue(undefined);
+  ratingsApi.getRating.mockResolvedValue(null);
+  ratingsApi.putRating.mockImplementation(async (_id: string, input: unknown) => ({
+    libraryEntryId: entry.id,
+    ...(input as object),
+    createdAt: entry.addedAt,
+    updatedAt: entry.updatedAt,
+  }));
+  ratingsApi.deleteRating.mockResolvedValue(undefined);
 });
 
 afterEach(cleanup);
@@ -78,6 +105,81 @@ describe('LibraryPage', () => {
       } satisfies LibraryListQuery,
       expect.any(AbortSignal),
     );
+  });
+
+  it('abre el editor de su propia entrada y guarda sin modificar el estado de biblioteca', async () => {
+    render(<LibraryPage onUnauthorized={vi.fn()} />);
+    await screen.findByText('Título no disponible');
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Puntuar y reseñar de Título no disponible' }),
+    );
+    await screen.findByRole('button', { name: 'Guardar valoración' });
+    expect(ratingsApi.getRating).toHaveBeenCalledWith(entry.id);
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Tu puntuación/ }), {
+      target: { value: '0' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar valoración' }));
+
+    await waitFor(() => {
+      expect(ratingsApi.putRating).toHaveBeenCalledWith(entry.id, {
+        score: 0,
+        review: null,
+        containsSpoilers: false,
+      });
+    });
+    expect(await screen.findByText('Tu valoración se guardó correctamente.')).toBeTruthy();
+    expect(libraryApi.updateLibraryEntry).not.toHaveBeenCalled();
+    expect(libraryApi.deleteLibraryEntry).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar editor de valoración' }));
+    expect(
+      await screen.findByRole('button', {
+        name: 'Mi valoración · 0,0/10 de Título no disponible',
+      }),
+    ).toBeTruthy();
+  });
+
+  it('muestra la puntuación existente desde la tarjeta y reutiliza la lectura al editar', async () => {
+    ratingsApi.getRating.mockResolvedValueOnce(savedRating);
+    render(<LibraryPage onUnauthorized={vi.fn()} />);
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Mi valoración · 8,4/10 de Título no disponible',
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText('Mi reseña')).toBeTruthy();
+    expect(ratingsApi.getRating).toHaveBeenCalledOnce();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Mi valoración · 8,4/10 de Título no disponible',
+      }),
+    );
+    expect(await screen.findByDisplayValue('Mi reseña')).toBeTruthy();
+    expect(ratingsApi.getRating).toHaveBeenCalledOnce();
+  });
+
+  it('bloquea el acceso al editor mientras carga la valoración inicial', async () => {
+    let resolveRating: (rating: RatingView | null) => void = () => {};
+    ratingsApi.getRating.mockReturnValueOnce(
+      new Promise<RatingView | null>((resolve) => {
+        resolveRating = resolve;
+      }),
+    );
+    render(<LibraryPage onUnauthorized={vi.fn()} />);
+
+    const loadingButton = await screen.findByRole('button', {
+      name: 'Cargando valoración… de Título no disponible',
+    });
+    expect(loadingButton).toHaveProperty('disabled', true);
+
+    await act(async () => resolveRating(null));
+    expect(
+      await screen.findByRole('button', {
+        name: 'Puntuar y reseñar de Título no disponible',
+      }),
+    ).toBeTruthy();
   });
 
   it('distingue una biblioteca vacía de filtros sin resultados', async () => {

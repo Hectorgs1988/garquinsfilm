@@ -1,4 +1,5 @@
-import type { LibraryEntryView, LibraryEntryStatus } from '@garquinsfilm/shared';
+import type { LibraryEntryView, LibraryEntryStatus, RatingView } from '@garquinsfilm/shared';
+import { SpoilerReview } from '../ratings/SpoilerReview.js';
 
 const STATUS_LABELS: Record<LibraryEntryStatus, string> = {
   PENDING: 'Pendiente',
@@ -25,6 +26,10 @@ interface LibraryEntryCardProps {
   onStatusChange: (entry: LibraryEntryView, status: LibraryEntryStatus) => void;
   onToggleFavorite: (entry: LibraryEntryView) => void;
   onRequestDelete: (entry: LibraryEntryView, trigger: HTMLButtonElement) => void;
+  rating?: RatingView | null;
+  ratingLoading?: boolean;
+  ratingError?: string;
+  onManageRating: (entry: LibraryEntryView) => void;
 }
 
 export function LibraryEntryCard({
@@ -34,9 +39,22 @@ export function LibraryEntryCard({
   onStatusChange,
   onToggleFavorite,
   onRequestDelete,
+  rating,
+  ratingLoading = false,
+  ratingError = '',
+  onManageRating,
 }: LibraryEntryCardProps) {
   const title = entry.media?.title || 'Título no disponible';
   const typeLabel = entry.type === 'movie' ? 'Película' : 'Serie';
+  const ratingActionLabel = ratingLoading
+    ? 'Cargando valoración…'
+    : rating === null
+      ? 'Puntuar y reseñar'
+      : rating?.score !== null && rating?.score !== undefined
+        ? `Mi valoración · ${rating.score.toLocaleString('es-ES', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}/10`
+        : rating?.review
+          ? 'Mi valoración · Reseña'
+          : 'Mi valoración';
 
   return (
     <article
@@ -80,6 +98,33 @@ export function LibraryEntryCard({
       <div
         className={`grid gap-3 ${view === 'list' ? 'mt-4 sm:mt-0 sm:w-64 sm:grid-cols-2' : 'grid-cols-2'}`}
       >
+        <div className="col-span-2">
+          <button
+            type="button"
+            className="min-h-11 w-full cursor-pointer rounded-lg border border-amber-700/60 bg-amber-950/20 px-3 text-sm font-semibold text-amber-100 transition-colors hover:border-amber-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300"
+            onClick={() => onManageRating(entry)}
+            aria-label={`${ratingActionLabel} de ${title}`}
+            aria-busy={ratingLoading || undefined}
+            disabled={ratingLoading}
+          >
+            {ratingActionLabel}
+          </button>
+          {ratingError && (
+            <p role="alert" className="mt-1 text-xs text-red-200">
+              {ratingError}
+            </p>
+          )}
+          {rating?.review && (
+            <div className="mt-2 space-y-2 rounded-lg border border-slate-700 bg-slate-900/50 p-3">
+              <p className="text-xs font-semibold text-slate-300">Tu reseña</p>
+              <SpoilerReview
+                key={`${rating.updatedAt}-${rating.review}`}
+                review={rating.review}
+                containsSpoilers={rating.containsSpoilers}
+              />
+            </div>
+          )}
+        </div>
         <label className="col-span-2 grid gap-1.5 text-xs font-medium text-slate-300 sm:col-span-2">
           Estado
           <select
