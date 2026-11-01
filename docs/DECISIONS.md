@@ -192,3 +192,15 @@ PROD-011 y ADR-002 fijan TMDB como fuente externa de películas y series, consum
 - La preferencia grid/list se almacena en `localStorage`, no en PostgreSQL.
 - Filtros MVP: tipo, estado y favoritos. Orden MVP: fecha de alta o actualización, con desempate estable por ID.
 - Estas decisiones precisan PROD-009: se excluyen el historial, los contadores y las entradas de re-visionado; la transición de estado descrita sí está permitida.
+
+## RATINGS-002 — Puntuaciones y reseñas personales
+
+**Estado: APROBADO — alcance backend privado**
+
+- Se mantiene PROD-004: puntuación de 0,0 a 10,0 inclusive, en pasos exactos de 0,1. El valor `0` es válido; `null` significa que no hay puntuación.
+- La reseña es opcional, texto plano y de hasta 2.000 puntos de código Unicode. Se permiten saltos de línea; se normalizan CRLF/CR a LF y se recortan espacios Unicode iniciales/finales. El vacío normalizado equivale a `null`.
+- Puede existir puntuación sin reseña y reseña sin puntuación; Rating no puede persistir con ambos valores ausentes.
+- `containsSpoilers` requiere reseña no vacía; sin reseña debe ser `false`. Las rutas de esta tarea siguen siendo privadas y no permiten consultar datos de otro usuario.
+- Modelo independiente `Rating`, relación 0..1 con `LibraryEntry`, unicidad por entrada y eliminación en cascada. No se duplica propietario ni identidad de contenido.
+- No se habilita compartir en perfiles, estadísticas públicas, listas, búsquedas ni actividad. Cualquier exposición futura requiere endpoints y autorización propios, diseñados y aprobados antes de implementarse.
+- La propuesta anterior de escala entera 1–10 que aparece en el borrador funcional consolidado queda sustituida por esta decisión para puntuaciones personales.

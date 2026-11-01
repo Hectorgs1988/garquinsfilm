@@ -14,6 +14,8 @@ import healthRoute from './routes/health.js';
 import catalogRoutes from './catalog/catalog.routes.js';
 import libraryRoutes from './library/library.routes.js';
 import type { LibraryRepository } from './library/library.service.js';
+import ratingRoutes from './ratings/ratings.routes.js';
+import type { RatingRepository } from './ratings/ratings.service.js';
 
 interface BuildAppOptions {
   database?: DatabaseHealth;
@@ -21,6 +23,7 @@ interface BuildAppOptions {
   auth?: AuthRuntime;
   tmdbClient?: TmdbClient;
   libraryRepository?: LibraryRepository;
+  ratingRepository?: RatingRepository;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -33,7 +36,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(cors, {
     origin: trustedOrigins,
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
   app.register(rateLimit, {
@@ -51,6 +54,10 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(libraryRoutes, {
     auth: options.auth,
     repository: options.libraryRepository,
+  });
+  app.register(ratingRoutes, {
+    auth: options.auth,
+    repository: options.ratingRepository,
   });
 
   app.register(healthRoute, { database });

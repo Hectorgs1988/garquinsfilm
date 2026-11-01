@@ -50,7 +50,8 @@ Catálogo TMDB (ADR-007: React → Fastify → TMDB, caché en memoria, contrato
 Dependencias y criterios en `docs/TASKS.md`. Cada tarea va en su rama `feature/*` con PR a `develop`. TMDB-TERMS-001 sigue pendiente.
 
 - Biblioteca personal sin duplicados; funciona con la identidad externa aunque no haya metadatos de catálogo. Valoraciones solo para títulos guardados.
-- Nota 0,0–10,0 en incrementos de 0,1, favoritos, filtros y orden.
+- Rating privado independiente 1:1 con LibraryEntry; nota 0,0–10,0 en incrementos de 0,1 (cero válido), reseña opcional en texto plano ≤2.000 puntos Unicode y marcador de spoilers. No se exponen valoraciones de terceros.
+- Mantener separada la nota personal de la puntuación TMDB; favoritos, estados, filtros y orden no se alteran al puntuar.
 - Estados comunes para películas y series: pendiente, viendo, completado y abandonado; se permiten transiciones entre ellos.
 - Sin entradas adicionales, historial ni contadores de visionados en el MVP.
 

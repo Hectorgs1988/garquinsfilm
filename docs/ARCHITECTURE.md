@@ -49,6 +49,8 @@ docs/
 
 La API será responsable de autorización, acceso a PostgreSQL y la integración con TMDB. `packages/shared` no contendrá acceso a la base de datos ni dependerá de modelos generados por Prisma.
 
+El módulo `apps/api/src/ratings` gestiona la valoración privada de una entrada existente de biblioteca. `Rating` es un recurso opcional 1:1 con `LibraryEntry`, con contratos compartidos en `packages/shared`; las rutas anidadas no exponen ratings de otros usuarios ni incorporan funciones sociales. El aislamiento, las restricciones de persistencia y el protocolo HTTP se especifican en `docs/DATA_MODEL.md`, `docs/API_INTEGRATION.md` y `docs/SECURITY.md`.
+
 ## Límites y flujo de datos
 
 ```text
@@ -121,11 +123,10 @@ Si esa vía no resulta viable, se propondrá una alternativa a revisión antes d
 - Condiciones TMDB (TMDB-TERMS-001): validación del uso previsto, compatibilidad con la cláusula de «derivados» y ubicación exacta de la atribución. Arquitectura del catálogo aprobada en ADR-007; implementación pendiente (TMDB-API-001/002/003, WEB-CATALOG-001/002).
 - Identidad visual definitiva.
 
-
 ### Implementación local de catálogo — TMDB-API-003 (2026-10-25)
 
 Actualiza la estructura propuesta anteriormente: `catalog.routes.ts` registra búsqueda
- y detalles, `catalog.search.ts`/`catalog.detail.ts` orquestan cliente y caché,
+y detalles, `catalog.search.ts`/`catalog.detail.ts` orquestan cliente y caché,
 `catalog.normalize.ts`/`catalog.detail.normalize.ts` normalizan `unknown` y los módulos
 `catalog.validation.ts`/`catalog.detail.validation.ts` validan entradas explícitamente.
 No se añadió `catalog.service.ts` ni infraestructura nueva. El detalle solicita

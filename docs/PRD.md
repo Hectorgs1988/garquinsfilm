@@ -35,7 +35,10 @@ Descubrir títulos, guardar lo que se quiere ver, registrar lo ya visto y compar
 - Películas y series comparten los estados **pendiente**, **viendo**, **completado** y **abandonado**. El estado inicial es pendiente.
 - Existe una única entrada por identidad externa (`source + type + tmdbId`) y usuario. No se guarda historial ni contador de visionados; volver de completado a viendo y completar de nuevo actualiza `completedAt`, no crea otra entrada.
 - Para valorar un título, debe estar en la biblioteca personal.
-- Nota personal opcional entre **0,0 y 10,0** inclusive, en incrementos de **0,1**; comentario opcional.
+- Puntuación personal opcional entre **0,0 y 10,0** inclusive, en incrementos de **0,1**; `0` es una nota válida y `null` representa ausencia de puntuación.
+- Reseña personal opcional de texto plano, máximo 2.000 puntos de código Unicode, con saltos de línea; no se interpreta Markdown ni HTML. Puede existir una reseña sin puntuación y una puntuación sin reseña.
+- La reseña puede marcarse con spoilers; `containsSpoilers` requiere texto de reseña. El ocultamiento visual corresponde al cliente, que debe evitar previews con texto de spoiler.
+- Las puntuaciones y reseñas son privadas en esta fase: no hay endpoints para consultar valoraciones ajenas ni publicación automática en perfiles o listas.
 - Favoritos independientes del estado; al entrar en completado se registra `completedAt` y se limpia al salir.
 - Edición/eliminación de entradas.
 - Filtros por tipo, estado y favoritos; orden por fecha de alta o actualización. La vista grid/list se recuerda en `localStorage`, no en el servidor.

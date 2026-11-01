@@ -43,10 +43,10 @@ Cada sección se plantea con carteles adaptados a móvil, navegación horizontal
 
 ### Estados
 
-| Contenido | Estados disponibles |
-|---|---|
-| Película | Pendiente, vista, abandonada |
-| Serie | Pendiente, viendo, terminada, abandonada |
+| Contenido | Estados disponibles                      |
+| --------- | ---------------------------------------- |
+| Película  | Pendiente, vista, abandonada             |
+| Serie     | Pendiente, viendo, terminada, abandonada |
 
 La puntuación y el favorito son independientes del estado.
 
@@ -70,7 +70,7 @@ La puntuación y el favorito son independientes del estado.
 
 ## 5. Valoraciones — aprobado
 
-- Escala **entera de 1 a 10**, sin decimales en la primera versión.
+- La propuesta inicial de escala **entera de 1 a 10**, sin decimales, queda sustituida por la decisión posterior RATINGS-002: **0,0 a 10,0 en pasos de 0,1**, con cero válido y `null` como ausencia de nota.
 - Valorar es **opcional** y la nota se puede modificar o eliminar.
 - Estado, favorito y valoración son independientes.
 - Las notas propias de GarquinsFilm se distinguen visualmente de las puntuaciones de TMDB.
@@ -97,17 +97,17 @@ La puntuación y el favorito son independientes del estado.
 - La puntuación, cuando sea visible, puede mostrarse sin revelar el texto marcado como spoiler.
 - Marcar spoilers no altera la privacidad: una reseña privada sigue siendo privada.
 
-**Pendiente de especificación:** límites de longitud, sanitización, tratamiento de textos largos y comportamiento de spoilers para el propio autor.
+**Especificación RATINGS-002 aprobada para el backend privado:** texto plano (sin Markdown ni HTML interpretado), hasta 2.000 puntos de código Unicode, saltos de línea permitidos; normalizar CRLF/CR a LF y recortar espacios Unicode en los extremos. Texto vacío normalizado equivale a ausencia. Spoilers requieren reseña no vacía; sin reseña el indicador es `false`. El frontend futuro ocultará inicialmente las reseñas con spoilers y evitará previews. Las rutas implementadas en esta fase solo permiten al propietario acceder a sus datos.
 
 ## 7. Listas — aprobado
 
 Se admitirán **tres modalidades**:
 
-| Modalidad | Visibilidad | Edición |
-|---|---|---|
-| Personal privada | Solo propietario | Propietario |
-| Compartida | Propietario y usuarios elegidos | Solo propietario |
-| Colaborativa | Propietario y usuarios elegidos | Propietario y editores autorizados |
+| Modalidad        | Visibilidad                     | Edición                            |
+| ---------------- | ------------------------------- | ---------------------------------- |
+| Personal privada | Solo propietario                | Propietario                        |
+| Compartida       | Propietario y usuarios elegidos | Solo propietario                   |
+| Colaborativa     | Propietario y usuarios elegidos | Propietario y editores autorizados |
 
 ### Miembros y permisos
 
@@ -222,18 +222,18 @@ Las estadísticas se actualizan con los cambios de biblioteca y valoraciones, y 
 
 Estas fases ordenan el trabajo; **no declaran entregas realizadas ni establecen fechas comprometidas**.
 
-| Orden orientativo | Entrega | Dependencia / alcance |
-|---|---|---|
-| 1 | TMDB-API-002 / TMDB-API-003 | Búsqueda y fichas; completar la verificación de términos antes de activar datos reales |
-| 2 | WEB-CATALOG-001 / WEB-CATALOG-002 | Interfaz Mobile First de búsqueda y fichas; fichas completas sujetas a ampliación de contratos y atribución TMDB |
-| 3 | Inicio: tendencias y populares | Endpoints/datos de tendencias y populares aún por definir en backlog técnico |
-| 4 | Biblioteca y seguimiento | Estados, favoritos y temporadas |
-| 5 | Valoraciones y reseñas | Escala 1–10, texto opcional, spoilers y privacidad |
-| 6 | Listas compartidas y colaborativas | Propietario, lectores, editores, control de permisos y orden manual/automático |
-| 7 | Perfiles, estadísticas y notificaciones internas | Requiere biblioteca, valoraciones y mecanismos de privacidad/autorización |
-| 8 | Inicio personal y actividad | Requiere biblioteca, privacidad y eventos autorizados |
-| 9 | Recomendaciones personalizadas | Requiere suficiente historial y validación de cumplimiento |
-| Posterior | Votaciones en listas colaborativas | Fuera del MVP; reglas de votación aún por concretar |
+| Orden orientativo | Entrega                                          | Dependencia / alcance                                                                                            |
+| ----------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| 1                 | TMDB-API-002 / TMDB-API-003                      | Búsqueda y fichas; completar la verificación de términos antes de activar datos reales                           |
+| 2                 | WEB-CATALOG-001 / WEB-CATALOG-002                | Interfaz Mobile First de búsqueda y fichas; fichas completas sujetas a ampliación de contratos y atribución TMDB |
+| 3                 | Inicio: tendencias y populares                   | Endpoints/datos de tendencias y populares aún por definir en backlog técnico                                     |
+| 4                 | Biblioteca y seguimiento                         | Estados, favoritos y temporadas                                                                                  |
+| 5                 | Valoraciones y reseñas                           | Escala 0,0–10,0 en pasos de 0,1, texto opcional, spoilers y privacidad                                           |
+| 6                 | Listas compartidas y colaborativas               | Propietario, lectores, editores, control de permisos y orden manual/automático                                   |
+| 7                 | Perfiles, estadísticas y notificaciones internas | Requiere biblioteca, valoraciones y mecanismos de privacidad/autorización                                        |
+| 8                 | Inicio personal y actividad                      | Requiere biblioteca, privacidad y eventos autorizados                                                            |
+| 9                 | Recomendaciones personalizadas                   | Requiere suficiente historial y validación de cumplimiento                                                       |
+| Posterior         | Votaciones en listas colaborativas               | Fuera del MVP; reglas de votación aún por concretar                                                              |
 
 **Nota:** esta tabla presenta un orden orientativo de desarrollo, no garantiza que todo forme parte del primer lanzamiento. La inclusión exacta de listas colaborativas, perfiles y notificaciones en el MVP debe cerrarse al planificar entregas. **Las votaciones sí quedan expresamente fuera del MVP.**
 
@@ -280,6 +280,7 @@ Estas fases ordenan el trabajo; **no declaran entregas realizadas ni establecen 
 - Un editor no puede gestionar permisos ni eliminar la lista.
 - Un usuario sin acceso no puede ver una lista privada.
 - Desactivar visibilidad de valoraciones excluye esas notas de la media compartida y de las vistas individuales posteriores.
+- RATINGS-002 no implementa compartir, medias comunitarias, perfiles, estadísticas públicas ni endpoints para consultar ratings ajenos; esas capacidades requieren diseño y autorización posteriores.
 - La media indica el tamaño de la muestra y no usa votos de TMDB.
 - El texto marcado como spoiler queda oculto en fichas y vistas previas hasta revelación voluntaria.
 

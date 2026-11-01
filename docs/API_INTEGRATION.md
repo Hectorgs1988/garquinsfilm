@@ -233,7 +233,6 @@ Se documentan en `.env.example` (sin valores secretos). No hay `TMDB_API_BASE_UR
 
 **[Aprobado / Oficial]** No enviar contenido TMDB a sistemas de IA generativa ni usarlo para entrenamiento sin autorización y licencias verificadas; los términos de TMDB lo prohíben expresamente para ML/IA. El MVP utiliza filtrado y reglas convencionales.
 
-
 ## TMDB-API-003 — detalle enriquecido (implementación local, 2026-10-25)
 
 Esta sección actualiza el contrato inicial de detalle según la sección 9 de
@@ -261,7 +260,7 @@ solo mocks, sin credenciales ni consultas reales. No hay cambios de PostgreSQL.
   Miembro: `{ tmdbId, name, job, profileUrl }`. IDs enteros seguros positivos;
   nombre obligatorio, fotografía opcional de la CDN oficial, sin duplicados.
 - `videos: MediaVideo[]`: `{ id, name, site, key, type, official, language, url,
-  embedUrl }`. Lista permitida de proveedores: YouTube (clave de 11 caracteres
+embedUrl }`. Lista permitida de proveedores: YouTube (clave de 11 caracteres
   alfanuméricos, guion o guion bajo) y Vimeo (ID numérico positivo de hasta 12 cifras).
   Tipos: Trailer, Teaser, Clip, Featurette, Behind the Scenes y Bloopers. URLs
   construidas en servidor, sin aceptar URLs externas del payload ni autoplay;
@@ -272,7 +271,7 @@ solo mocks, sin credenciales ni consultas reales. No hay cambios de PostgreSQL.
   desempate estable por ID. No se hace una segunda petición si no hay vídeos.
   No se garantiza un tráiler traducido: se usan los disponibles en la respuesta.
 - `watchProviders: MediaWatchProviders`: `{ region: 'ES', attribution: 'JustWatch',
-  link, subscription, rent, buy }`. Mapeo desde `flatrate`, `rent`, `buy`; no se
+link, subscription, rent, buy }`. Mapeo desde `flatrate`, `rent`, `buy`; no se
   incorporan `free`, `ads` ni otros países. Proveedor: `{ tmdbId, name, logoUrl }`.
   Logotipos en tamaño `w92`. Sin precios. Deduplicación dentro de cada modalidad; un proveedor puede aparecer
   en varias. `link` solo acepta HTTPS de `www.themoviedb.org`, sin credenciales,
@@ -313,13 +312,13 @@ La API de biblioteca no consulta TMDB y no depende de que el catálogo esté dis
 Todas las rutas requieren una sesión Better Auth y aíslan por el `userId` de esa sesión.
 Las respuestas privadas llevan `Cache-Control: private, no-store`.
 
-| Método | Ruta | Resultado |
-| --- | --- | --- |
-| `POST` | `/api/library` | Crea una entrada (`201`), duplicado propio `409`. |
-| `GET` | `/api/library` | Lista paginada; filtros `type`, `status`, `favorite`; orden `addedAt|updatedAt` y `asc|desc`, desempate estable por ID. Página inicial 1, tamaño 20, máximo 100. |
-| `GET` | `/api/library/:id` | Lee una entrada propia; ausente o ajena `404`. |
-| `PATCH` | `/api/library/:id` | Modifica solo `status` e `isFavorite`; cuerpo vacío o propiedades adicionales `400`. |
-| `DELETE` | `/api/library/:id` | Elimina la entrada propia (`204`); no elimina el registro compartido `Media`; ausente o ajena `404`. |
+| Método   | Ruta               | Resultado                                                                                                                                                                                       |
+| -------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/api/library`     | Crea una entrada (`201`), duplicado propio `409`.                                                                                                                                               |
+| `GET`    | `/api/library`     | Lista paginada; filtros `type`, `status`, `favorite`; orden por fecha de alta o actualización, ascendente o descendente, con desempate estable por ID. Página inicial 1, tamaño 20, máximo 100. |
+| `GET`    | `/api/library/:id` | Lee una entrada propia; ausente o ajena `404`.                                                                                                                                                  |
+| `PATCH`  | `/api/library/:id` | Modifica solo `status` e `isFavorite`; cuerpo vacío o propiedades adicionales `400`.                                                                                                            |
+| `DELETE` | `/api/library/:id` | Elimina la entrada propia (`204`); no elimina el registro compartido `Media`; ausente o ajena `404`.                                                                                            |
 
 `LibraryEntryStatus`: `PENDING`, `WATCHING`, `COMPLETED`, `ABANDONED`. El estado inicial es `PENDING`.
 `isFavorite` es independiente. `completedAt` se establece al entrar en `COMPLETED`, se limpia al salir
@@ -329,3 +328,38 @@ unicidad `(userId,mediaId)` en `LibraryEntry` y coherencia de `completedAt`.
 La suite de integración `pnpm --filter @garquinsfilm/api test:library:integration` requiere
 `LIBRARY_TEST_DATABASE_URL` apuntando a PostgreSQL de loopback con nombre terminado en `_test`;
 no ejecuta migraciones automáticamente.
+
+## Puntuaciones y reseñas personales (RATINGS-002)
+
+Las rutas anidadas en biblioteca operan únicamente sobre la entrada de la sesión Better Auth; el
+`userId` no se acepta del cliente. Responden con `Cache-Control: private, no-store`. Una entrada
+inexistente o ajena devuelve el mismo `404`. No existen rutas públicas ni consultas de valoraciones
+de terceros en esta entrega.
+
+| Método   | Ruta                           | Resultado                                                                                                                                               |
+| -------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/library/:entryId/rating` | `200` con `RatingView`, o `null` cuando la entrada propia aún no tiene valoración; entrada inexistente/ajena `404`.                                     |
+| `PUT`    | `/api/library/:entryId/rating` | Upsert de representación completa; `201` al crear, `200` al reemplazar; validación `400`, conflicto concurrente `409`, entrada inexistente/ajena `404`. |
+| `DELETE` | `/api/library/:entryId/rating` | `204` si se elimina o ya no existe para una entrada propia; entrada inexistente/ajena `404`; conflicto concurrente `409`.                               |
+
+`RatingView` contiene `libraryEntryId`, `score: number | null`, `review: string | null`,
+`containsSpoilers`, `createdAt` y `updatedAt`. `RatingPutInput` requiere los tres campos de
+contenido (`score`, `review`, `containsSpoilers`); no admite propiedades desconocidas ni campos
+omitidos. Para eliminar ambos valores se usa DELETE, no un PUT vacío.
+
+La nota es 0,0–10,0, pasos exactos de 0,1; `0` es válido y `null` indica ausencia. Se almacena en
+`scoreTenths` entero 0–100. La reseña es texto plano, máximo 2.000 puntos de código Unicode; se
+normalizan CRLF/CR a LF y se recortan espacios Unicode de los extremos. Una cadena vacía normalizada
+se convierte en `null`. Puede haber puntuación sin reseña o reseña sin puntuación, pero no se
+persiste Rating con ambas ausentes. Spoilers requieren reseña.
+
+El PUT reemplaza toda la representación; transacciones Serializable detectan conflictos de escritura
+concurrentes (`409`) en lugar de prometer prevención de pérdida de actualizaciones mediante un
+sobrescrito silencioso. El rating no actualiza la fecha, estado o favorito de `LibraryEntry`. Los
+cuerpos PUT tienen un máximo de 16 KiB.
+
+La suite `pnpm --filter @garquinsfilm/api test:ratings:integration` requiere
+`RUN_RATINGS_INTEGRATION_TESTS=1` y `RATINGS_TEST_DATABASE_URL` hacia PostgreSQL local con nombre
+terminado en `_ratings_test` (o `_auth_test` para reutilizar la base efímera aislada de CI); la suite
+verifica que el destino sea loopback y no ejecuta migraciones. Aplicar migraciones de prueba
+separadamente solo a esa base aislada.
