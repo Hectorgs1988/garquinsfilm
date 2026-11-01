@@ -48,10 +48,10 @@ Descubrir títulos, guardar lo que se quiere ver, registrar lo ya visto y compar
 ### 4. Seguimiento de temporadas
 
 - Listar temporadas de series presentes en TMDB.
-- Marcar una temporada completa como vista/no vista; mostrar progreso X/Y temporadas normales.
-- Temporada 0/especiales excluida del denominador.
-- No se realiza seguimiento de episodios en el MVP.
-- Marcar la última temporada disponible no cambia automáticamente el estado de la serie a terminada.
+- Marcar una temporada completa como vista/no vista; mostrar progreso X/Y temporadas normales (SERIES-001/002/003: el backend persiste solo las temporadas completadas por `LibraryEntry`, y el porcentaje se calcula en la interfaz a partir de los metadatos del detalle).
+- Temporada 0/especiales excluida del denominador; puede marcarse y desmarcarse como cualquier otra temporada.
+- No se realiza seguimiento de episodios ni se guarda historial de visionados en el MVP.
+- Marcar la última temporada disponible no cambia automáticamente el estado de la serie a terminada; marcar o desmarcar temporadas tampoco altera estado, favoritos ni puntuaciones.
 
 ### 5. Listas compartidas
 

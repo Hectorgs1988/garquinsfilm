@@ -204,3 +204,20 @@ PROD-011 y ADR-002 fijan TMDB como fuente externa de películas y series, consum
 - Modelo independiente `Rating`, relación 0..1 con `LibraryEntry`, unicidad por entrada y eliminación en cascada. No se duplica propietario ni identidad de contenido.
 - No se habilita compartir en perfiles, estadísticas públicas, listas, búsquedas ni actividad. Cualquier exposición futura requiere endpoints y autorización propios, diseñados y aprobados antes de implementarse.
 - La propuesta anterior de escala entera 1–10 que aparece en el borrador funcional consolidado queda sustituida por esta decisión para puntuaciones personales.
+
+## SERIES-001 — Seguimiento de temporadas
+
+**Estado: APROBADO — implementación backend en SERIES-002; interfaz en SERIES-003**
+
+Complementa PROD-006 (progreso por temporada completa, sin episodios) y sustituye el diseño conceptual anterior de `SeasonProgress` basado en `user_id` y `series_media_id`. La tarea histórica `TV-001` se divide en SERIES-001 (diseño), SERIES-002 (backend) y SERIES-003 (interfaz).
+
+- **Relación:** `SeasonProgress` pertenece a `LibraryEntry` (FK con `ON DELETE CASCADE`), no a `User` ni a `Media`. Solo se permite para entradas con `Media.type=tv`; dos usuarios siguen la misma serie de forma independiente.
+- **Persistencia:** solo se guardan las temporadas completadas. La fila significa «completada» y su ausencia «pendiente»; no hay booleano `completed`, `updatedAt` ni historial. `completedAt` lo fija el servidor y se conserva al repetir la operación.
+- **Temporada 0:** se almacena como cualquier temporada, puede marcarse y desmarcarse y no contribuye al porcentaje principal.
+- **Límites:** `seasonNumber` entre 0 y 9999 (CHECK en PostgreSQL) y máximo 500 temporadas completadas por entrada (servicio); lotes de hasta 100 números.
+- **Operaciones:** `GET`, `PUT` y `DELETE` por temporada y `PATCH` por lotes bajo `/api/library/:entryId/seasons`. Son declarativas e idempotentes (`PUT` = «establecer completada», `DELETE` = «establecer pendiente», `PATCH` = aplicar el conjunto) y los lotes son atómicos.
+- **Concurrencia:** cada escritura bloquea la fila de `LibraryEntry` con `SELECT … FOR UPDATE` dentro de una transacción `READ COMMITTED`. Se prefiere a `Serializable` porque el límite global de 500 exige una comprobación y escritura atómicas por entrada, sin reintentos ni conflictos de serialización. Las operaciones contrarias se resuelven en el orden de la cola de bloqueo; si la entrada se elimina durante la operación, la respuesta es `404`, nunca `500`. No hay control de versión ni `409` de conflicto de edición; `409` solo indica que se alcanzó el límite de 500.
+- **Independencia:** marcar o desmarcar temporadas no cambia `status`, `completedAt`, `updatedAt`, favoritos ni Rating, y no cambia automáticamente el estado a `WATCHING` o `COMPLETED`.
+- **Cálculo del progreso:** fuera del backend. SERIES-003 lo calculará con una función pura (excluye temporada 0, cuenta temporadas regulares con `episodeCount > 0`, excluye temporadas claramente futuras, no trata una fecha nula como futura, cuenta elementos reales, muestra progreso indeterminado sin metadatos fiables y presenta aparte las temporadas completadas que ya no figuran en el catálogo).
+- **Sin TMDB y sin ampliar `LibraryEntryView`:** el backend no consulta TMDB ni persiste datos editoriales; la biblioteca no muestra contadores de temporadas. El progreso se consulta al abrir la ficha de la serie.
+- **Fuera del MVP:** seguimiento por episodios e historial de visionados.

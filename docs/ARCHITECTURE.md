@@ -49,6 +49,8 @@ docs/
 
 La API será responsable de autorización, acceso a PostgreSQL y la integración con TMDB. `packages/shared` no contendrá acceso a la base de datos ni dependerá de modelos generados por Prisma.
 
+El módulo `apps/api/src/season-progress` (SERIES-002) gestiona el progreso por temporadas de una entrada de serie: `SeasonProgress` es una relación 1:N con `LibraryEntry` (solo temporadas completadas), con contratos en `packages/shared/src/season-progress.ts`, validación estricta, servicio Prisma que serializa las escrituras por entrada con `SELECT … FOR UPDATE` y rutas `/api/library/:entryId/seasons`. No depende de TMDB; el porcentaje se calcula en SERIES-003 a partir del detalle del catálogo.
+
 El módulo `apps/api/src/ratings` gestiona la valoración privada de una entrada existente de biblioteca. `Rating` es un recurso opcional 1:1 con `LibraryEntry`, con contratos compartidos en `packages/shared`; las rutas anidadas no exponen ratings de otros usuarios ni incorporan funciones sociales. El aislamiento, las restricciones de persistencia y el protocolo HTTP se especifican en `docs/DATA_MODEL.md`, `docs/API_INTEGRATION.md` y `docs/SECURITY.md`.
 
 ## Límites y flujo de datos

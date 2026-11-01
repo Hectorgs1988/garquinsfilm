@@ -59,7 +59,7 @@ Dependencias y criterios en `docs/TASKS.md`. Cada tarea va en su rama `feature/*
 
 ## Fase 3 — Temporadas y listas compartidas
 
-- Progreso por temporadas completas, sin seguimiento de episodios.
+- Progreso por temporadas completas, sin seguimiento de episodios: SERIES-002 (backend, implementado localmente) y SERIES-003 (interfaz, pendiente).
 - Listas compartidas con adición y retirada de títulos por miembros.
 - Solo el propietario administra miembros y elimina la lista.
 - Pruebas de permisos y aislamiento.

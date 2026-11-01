@@ -137,11 +137,11 @@ Cuerpo `{ "error": "<mensaje genérico en español>" }`, coherente con el resto 
 
 ## Operaciones futuras (NO aprobadas ni incluidas en TMDB-001)
 
-Las rutas siguientes son **orientativas, no aprobadas y no implementadas**; se concretarán en sus tareas (DISC-_, LIB-_, TV-001) y requieren aprobación:
+Las rutas siguientes son **orientativas, no aprobadas y no implementadas**; se concretarán en sus tareas (DISC-_, LIB-_; el progreso de temporadas se implementó como SERIES-002, antes `TV-001`) y requieren aprobación:
 
 - Descubrimiento por género, año, fecha, puntuación media y conteo de votos (`GET /api/discover`).
 - Rankings (`GET /api/rankings/top`).
-- Detalle por temporada o episodios (no hay ruta `/seasons` aprobada; las temporadas viajan en el detalle de serie).
+- Detalle por temporada o episodios de TMDB (no hay ruta de catálogo `/seasons`; las temporadas viajan en el detalle de serie). El progreso personal de temporadas sí existe bajo `/api/library/:entryId/seasons` (SERIES-002) y no consulta TMDB.
 - Tendencias/popularidad solo como descubrimiento auxiliar, sin confundirlas con mejores valoradas.
 
 ## Rankings aprobados inicialmente
@@ -363,3 +363,24 @@ La suite `pnpm --filter @garquinsfilm/api test:ratings:integration` requiere
 terminado en `_ratings_test` (o `_auth_test` para reutilizar la base efímera aislada de CI); la suite
 verifica que el destino sea loopback y no ejecuta migraciones. Aplicar migraciones de prueba
 separadamente solo a esa base aislada.
+
+## Progreso por temporadas (SERIES-002)
+
+Las rutas anidadas en biblioteca operan únicamente sobre series (`Media.type=tv`) de la entrada de
+la sesión Better Auth; el `userId` no se acepta del cliente. Responden con
+`Cache-Control: private, no-store`. Una entrada inexistente o ajena devuelve el mismo `404`; una
+película propia devuelve `400`. No consultan TMDB ni calculan porcentajes.
+
+| Método   | Ruta                                       | Resultado                                                                                                                                         |
+| -------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/library/:entryId/seasons`            | `200` con `SeasonProgressView` (temporadas completadas por número ascendente, sin paginación).                                                    |
+| `PUT`    | `/api/library/:entryId/seasons/:seasonNumber` | Sin cuerpo. Marca como completada: `201` al crear, `200` si ya lo estaba (conserva `completedAt`); ambos devuelven `SeasonProgressItem`.        |
+| `DELETE` | `/api/library/:entryId/seasons/:seasonNumber` | `204` siempre que la entrada sea una serie propia, también si la temporada ya estaba pendiente.                                                |
+| `PATCH`  | `/api/library/:entryId/seasons`            | Lote atómico `{ complete?: number[], uncomplete?: number[] }`; `200` con `SeasonProgressView` final. Idempotente.                                |
+
+- `seasonNumber` es un entero canónico 0–9999 (`^(0|[1-9]\d{0,3})$`): sin signo, ceros iniciales, decimales ni notación exponencial. La temporada 0 representa especiales.
+- Lote: al menos una operación, máximo 100 números en total, sin duplicados dentro de cada lista, sin números en ambas listas y sin propiedades desconocidas.
+- Máximo 500 temporadas completadas por entrada: superarlo devuelve `409` (`PUT` y `PATCH`) sin escribir nada. Repetir un `PUT` sobre una temporada ya completada no cuenta contra el límite.
+- Errores: `400` entrada inválida o película; `401` sin sesión; `403` origen no confiable; `404` entrada inexistente/ajena; `413` cuerpo excesivo (1 KiB en PUT/DELETE, 4 KiB en PATCH); `429` límite de frecuencia (60/min lectura, 30/min escritura); `503` almacenamiento no disponible o transacción expirada por esperar el bloqueo de la entrada (reintentable).
+- Contratos en `packages/shared/src/season-progress.ts`: `SEASON_NUMBER_MAX`, `SEASON_PROGRESS_MAX_PER_ENTRY`, `SEASON_PROGRESS_BATCH_MAX`, `SeasonProgressItem { seasonNumber, completedAt }`, `SeasonProgressView { libraryEntryId, completedSeasons }` y `SeasonProgressBatchInput`.
+- Concurrencia: cada escritura toma `SELECT … FOR UPDATE` sobre la `LibraryEntry` dentro de una transacción `READ COMMITTED` (véase `DECISIONS.md`, SERIES-001). No hay `409` de edición concurrente ni control de versión.

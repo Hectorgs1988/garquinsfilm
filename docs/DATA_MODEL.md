@@ -1,6 +1,6 @@
 # Modelo de datos lógico — propuesta
 
-> Modelo conceptual alineado al estado de RATINGS-002. PostgreSQL y Prisma están aprobados; autenticación, invitaciones y biblioteca tienen migraciones versionadas. Ratings se incorporan en esta tarea; temporadas y listas continúan siendo diseños pendientes de implementación.
+> Modelo conceptual alineado al estado de RATINGS-002. PostgreSQL y Prisma están aprobados; autenticación, invitaciones y biblioteca tienen migraciones versionadas. Ratings están integrados; el progreso por temporadas se implementa en SERIES-002 (backend) y las listas continúan siendo un diseño pendiente de implementación.
 
 - **User:** identidad gestionada por Better Auth. El rol global usa el enum `GlobalRole` (`admin|user`) y solo se asigna en servidor. El alta normal ocurre al aceptar una invitación; el primer administrador se crea mediante el comando local controlado.
 - **Session:** sesiones gestionadas por Better Auth y relacionadas con User; proteger tokens y metadatos sensibles.
@@ -11,7 +11,7 @@
 - **Media (biblioteca):** id, `source=tmdb`, `type=movie|tv`, `tmdbId` entero positivo. **Unique(source, type, tmdbId)**. Solo mantiene la identidad externa; no persiste metadatos editoriales ni depende de TMDB.
 - **LibraryEntry:** id, user_id, media_id, `status=PENDING|WATCHING|COMPLETED|ABANDONED`, `is_favorite`, `added_at`, `updated_at`, `completed_at?`. **Unique(user_id, media_id)**. User se elimina en cascada; Media usa `RESTRICT`.
 - **Rating (RATINGS-002):** `libraryEntryId` único, `scoreTenths Int?` (0–100), `review String?`, `containsSpoilers`, `createdAt`, `updatedAt`. Pertenece a una entrada de biblioteca existente; no duplica usuario ni identidad de contenido. La API convierte las décimas enteras a `score` numérico 0,0–10,0.
-- **SeasonProgress:** id, user_id, series_media_id, season_number, watched, watched_at?. **Unique(user_id, series_media_id, season_number)**. Sólo aplica a `type=tv`.
+- **SeasonProgress (SERIES-002, implementado):** `id`, `libraryEntryId`, `seasonNumber Int` (0–9999) y `completedAt` (fijado por el servidor). **Unique(libraryEntryId, seasonNumber)**; FK a `LibraryEntry` con `ON DELETE CASCADE`. Tabla `season_progress`. Solo se persisten las temporadas **completadas**: la fila significa «completada» y su ausencia «pendiente» (sin booleano `completed`, sin `updatedAt`, sin historial). Solo aplica a entradas cuyo `Media.type=tv`. Sustituye al diseño conceptual anterior (`user_id`, `series_media_id`, `watched`, `watched_at`) por decisión SERIES-001: el progreso pertenece a `LibraryEntry`, no a `User` ni `Media`.
 - **SharedList:** id, owner_id, name, description?, created_at, updated_at.
 - **SharedListMember:** list_id, user_id, role=`owner|member`, joined_at. **Unique(list_id, user_id)**. Este rol de pertenencia y la propiedad de la lista son independientes del rol global `admin|user`.
 - **SharedListItem:** list_id, media_id, added_by, added_at. **Unique(list_id, media_id)**.
@@ -34,7 +34,9 @@
 - Eliminar `LibraryEntry` elimina su Rating, pero no elimina Media. Modificar Rating no cambia `LibraryEntry.updatedAt`, estado ni favorito.
 - Las puntuaciones y reseñas son privadas en RATINGS-002; no hay relación pública ni endpoints para obtenerlas por usuario o contenido global.
 - No se crea otra entrada, historial ni contador al volver a ver un contenido; cambiar de `COMPLETED` a `WATCHING` está permitido y una nueva transición a `COMPLETED` actualiza `completedAt`.
-- El progreso de series se computa sobre temporadas normales; temporada 0/especiales se excluyen del denominador.
+- El progreso de series se computa sobre temporadas normales; temporada 0/especiales se excluyen del denominador. El cálculo del porcentaje **no se hace en el backend** (SERIES-003): la API solo conoce las temporadas completadas.
+- SeasonProgress: PostgreSQL comprueba `seasonNumber BETWEEN 0 AND 9999`, unicidad por entrada y temporada y FK con cascada. El máximo de **500 temporadas completadas por entrada** y la restricción «solo series» las hace cumplir el servicio dentro de una transacción que bloquea la fila de `LibraryEntry` (`SELECT … FOR UPDATE`), por lo que no hay carreras de conteo ni violaciones de FK si la entrada se elimina durante la operación. No se añaden triggers.
+- Marcar o desmarcar temporadas no modifica `LibraryEntry.status`, `completedAt`, `updatedAt`, `isFavorite` ni Rating. Eliminar `LibraryEntry` elimina su progreso por cascada. No se almacenan títulos, pósteres ni sinopsis de temporadas.
 - Los miembros pueden añadir y retirar títulos de una lista; solo el propietario gestiona miembros y elimina la lista.
 - Las operaciones de listas requieren control de acceso en backend.
 - La eliminación de un usuario/lista requiere reglas explícitas de retención y borrado, todavía pendientes.
