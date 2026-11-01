@@ -11,6 +11,7 @@
     "test": "pnpm prisma:generate && vitest run",
     "test:integration": "pnpm prisma:generate && RUN_AUTH_INTEGRATION_TESTS=1 vitest run src/auth/*.integration.test.ts",
     "test:library:integration": "pnpm prisma:generate && RUN_LIBRARY_INTEGRATION_TESTS=1 vitest run src/library/*.integration.test.ts",
+    "test:ratings:integration": "pnpm prisma:generate && RUN_RATINGS_INTEGRATION_TESTS=1 vitest run src/ratings/*.integration.test.ts",
     "test:mailpit": "RUN_MAILPIT_TESTS=1 vitest run src/email/mailpit.integration.test.ts",
     "auth:bootstrap-admin": "tsx src/scripts/bootstrap-admin.ts",
     "auth:create-local-invitation": "tsx src/scripts/create-local-invitation.ts",

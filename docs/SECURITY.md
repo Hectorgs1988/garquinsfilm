@@ -15,6 +15,7 @@
 - Validar entradas y aplicar autorización en servidor para cada operación sobre biblioteca, valoraciones, progreso y listas.
 - **Biblioteca personal (LIBRARY-002):** todas las rutas requieren sesión Better Auth; el `userId` procede exclusivamente de esa sesión y cada lectura/escritura incluye el propietario en su filtro. Respuestas `private, no-store`; entradas y consultas rechazan propiedades/valores desconocidos. Unicidad por usuario/identidad y `completedAt` coherente se hacen cumplir también en PostgreSQL. La biblioteca solo persiste `source + type + tmdbId`; no llama a TMDB ni guarda metadata editorial.
 - Las valoraciones solo se crean para títulos en la biblioteca personal. Un usuario no puede leer ni modificar los datos personales de otro.
+- **Puntuaciones y reseñas (RATINGS-002):** las rutas requieren Better Auth y comprueban la propiedad de `LibraryEntry` en cada operación. La identidad proviene solo de la sesión; entrada ajena e inexistente son indistinguibles (`404`). Las respuestas usan `private, no-store`; PUT tiene límite de 16 KiB, validación estricta y conflictos concurrentes genéricos (`409`). Reseñas se almacenan como texto plano, con límite y normalización Unicode, y se renderizarán como texto, nunca HTML interpretado. No se exponen ratings de terceros ni se añaden endpoints sociales en esta fase.
 - Invitaciones de un solo uso con token aleatorio almacenado como hash y fecha de vencimiento.
 - Secretos en variables de entorno del servidor o gestor de secretos; `.env` real fuera del control de versiones. No introducir credenciales reales en archivos versionados.
 - Controlar dependencias, ejecutar CI, limitar CORS y generar logs sanitizados. No registrar contraseñas, cookies, tokens de sesión/invitación ni datos personales innecesarios.
@@ -27,7 +28,6 @@
 ## Pruebas de seguridad que bloquean entrega
 
 Usuario A no puede leer/modificar la biblioteca, valoraciones o progreso de B; ver listas privadas sin pertenencia; editar una lista tras ser eliminado; ni cambiar roles sin permiso. El registro sin invitación, la emisión de invitaciones por usuarios no administradores y la elevación de rol desde el cliente deben rechazarse. Invitaciones vencidas o ya consumidas, incluidas aceptaciones concurrentes, no deben crear más de una cuenta. Los miembros pueden añadir y retirar títulos, pero no administrar miembros ni eliminar la lista. Contraseñas, cookies, sesiones e invitaciones no deben aparecer en logs ni respuestas API. Solicitudes de origen no confiable no deben omitir las protecciones CSRF. Cuando se implemente el catálogo: las rutas de catálogo sin sesión devuelven 401, y el token TMDB no debe aparecer en respuestas, logs ni bundle del frontend.
-
 
 ### Detalles enriquecidos — implementación local TMDB-API-003
 

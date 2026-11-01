@@ -1,6 +1,6 @@
 # Modelo de datos lógico — propuesta
 
-> Modelo conceptual; PostgreSQL y Prisma están aprobados. Los modelos de autenticación e invitación están versionados en Prisma; los modelos de negocio siguen fuera de las migraciones actuales.
+> Modelo conceptual alineado al estado de RATINGS-002. PostgreSQL y Prisma están aprobados; autenticación, invitaciones y biblioteca tienen migraciones versionadas. Ratings se incorporan en esta tarea; temporadas y listas continúan siendo diseños pendientes de implementación.
 
 - **User:** identidad gestionada por Better Auth. El rol global usa el enum `GlobalRole` (`admin|user`) y solo se asigna en servidor. El alta normal ocurre al aceptar una invitación; el primer administrador se crea mediante el comando local controlado.
 - **Session:** sesiones gestionadas por Better Auth y relacionadas con User; proteger tokens y metadatos sensibles.
@@ -10,7 +10,7 @@
 - **AuditEvent (implementado):** acción, actor opcional, id de objetivo opcional y fecha; no contiene token, contraseña ni correo de invitación.
 - **Media (biblioteca):** id, `source=tmdb`, `type=movie|tv`, `tmdbId` entero positivo. **Unique(source, type, tmdbId)**. Solo mantiene la identidad externa; no persiste metadatos editoriales ni depende de TMDB.
 - **LibraryEntry:** id, user_id, media_id, `status=PENDING|WATCHING|COMPLETED|ABANDONED`, `is_favorite`, `added_at`, `updated_at`, `completed_at?`. **Unique(user_id, media_id)**. User se elimina en cascada; Media usa `RESTRICT`.
-- **Rating:** library_entry_id único, score (decimal(3,1)), comment?, updated_at. La valoración pertenece a una entrada de biblioteca; score entre 0,0 y 10,0 en incrementos de 0,1.
+- **Rating (RATINGS-002):** `libraryEntryId` único, `scoreTenths Int?` (0–100), `review String?`, `containsSpoilers`, `createdAt`, `updatedAt`. Pertenece a una entrada de biblioteca existente; no duplica usuario ni identidad de contenido. La API convierte las décimas enteras a `score` numérico 0,0–10,0.
 - **SeasonProgress:** id, user_id, series_media_id, season_number, watched, watched_at?. **Unique(user_id, series_media_id, season_number)**. Sólo aplica a `type=tv`.
 - **SharedList:** id, owner_id, name, description?, created_at, updated_at.
 - **SharedListMember:** list_id, user_id, role=`owner|member`, joined_at. **Unique(list_id, user_id)**. Este rol de pertenencia y la propiedad de la lista son independientes del rol global `admin|user`.
@@ -28,7 +28,11 @@
 - `completedAt` es obligatorio si y solo si el estado es `COMPLETED`. Entrar en ese estado asigna la fecha; salir la limpia; volver a completado después asigna una fecha nueva. La base de datos y el servicio hacen cumplir la coherencia.
 - Favoritos son independientes del estado. Cambiar estado no cambia `isFavorite`.
 - Una valoración solo puede existir para un título presente en la biblioteca personal; su unicidad se deriva de la entrada única por usuario y medio.
-- El valor de una nota tiene un decimal y está en el rango inclusivo 0,0–10,0.
+- Una puntuación ausente es `null`; cero es una puntuación válida. El valor público tiene precisión exacta de 0,1 y rango inclusivo 0,0–10,0.
+- La reseña es texto plano de hasta 2.000 puntos de código Unicode; se normalizan saltos CRLF/CR a LF y espacios Unicode de los extremos. La reseña vacía equivale a `null`; no se interpreta HTML ni Markdown.
+- Rating requiere puntuación o reseña. `containsSpoilers` solo puede ser verdadero cuando existe una reseña. PostgreSQL comprueba rango, presencia, texto no blanco, longitud, coherencia de spoilers, unicidad y FK con `ON DELETE CASCADE`.
+- Eliminar `LibraryEntry` elimina su Rating, pero no elimina Media. Modificar Rating no cambia `LibraryEntry.updatedAt`, estado ni favorito.
+- Las puntuaciones y reseñas son privadas en RATINGS-002; no hay relación pública ni endpoints para obtenerlas por usuario o contenido global.
 - No se crea otra entrada, historial ni contador al volver a ver un contenido; cambiar de `COMPLETED` a `WATCHING` está permitido y una nueva transición a `COMPLETED` actualiza `completedAt`.
 - El progreso de series se computa sobre temporadas normales; temporada 0/especiales se excluyen del denominador.
 - Los miembros pueden añadir y retirar títulos de una lista; solo el propietario gestiona miembros y elimina la lista.

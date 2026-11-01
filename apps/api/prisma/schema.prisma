@@ -76,6 +76,7 @@ model LibraryEntry {
   addedAt     DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   completedAt DateTime?
+  rating      Rating?
   user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   media       Media              @relation(fields: [mediaId], references: [id], onDelete: Restrict)
 
@@ -85,6 +86,19 @@ model LibraryEntry {
   @@index([userId, status])
   @@index([userId, isFavorite])
   @@map("library_entry")
+}
+
+model Rating {
+  id               String       @id @default(cuid())
+  libraryEntryId   String       @unique
+  scoreTenths      Int?
+  review           String?
+  containsSpoilers Boolean      @default(false)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  libraryEntry     LibraryEntry @relation(fields: [libraryEntryId], references: [id], onDelete: Cascade)
+
+  @@map("rating")
 }
 
 model Session {
