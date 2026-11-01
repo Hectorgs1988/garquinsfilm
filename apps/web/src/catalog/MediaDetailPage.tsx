@@ -13,6 +13,7 @@ import { createLibraryEntry, findLibraryEntryForMedia } from '../library/library
 import { RatingDialog } from '../ratings/RatingDialog.js';
 import { getRating } from '../ratings/ratings.api.js';
 import { SpoilerReview } from '../ratings/SpoilerReview.js';
+import { SeasonProgressPanel } from '../seasons/SeasonProgressPanel.js';
 import { MediaCredits } from './MediaCredits.js';
 import { TrailerModal } from './TrailerModal.js';
 
@@ -433,6 +434,15 @@ export function MediaDetailPage({
             crew={detail.type === 'movie' ? detail.directors : detail.creators}
             crewTitle={detail.type === 'movie' ? 'Dirección' : 'Creación'}
           />
+          {detail.type === 'tv' && (
+            <MySeasons
+              checking={checkingLibrary}
+              entryId={libraryEntry?.id ?? null}
+              seasons={detail.seasons}
+              seriesStatus={detail.status}
+              onUnauthorized={() => unauthorizedHandler.current?.()}
+            />
+          )}
           {detail.type === 'tv' && <SeasonList seasons={detail.seasons} />}
           <WatchProviders providers={detail.watchProviders} isDemo={isDemo} />
         </>
@@ -458,6 +468,43 @@ export function MediaDetailPage({
             setRatingError('');
           }}
         />
+      )}
+    </section>
+  );
+}
+
+function MySeasons({
+  checking,
+  entryId,
+  seasons,
+  seriesStatus,
+  onUnauthorized,
+}: {
+  checking: boolean;
+  entryId: string | null;
+  seasons: TvSeason[];
+  seriesStatus: string | null;
+  onUnauthorized: () => void;
+}) {
+  return (
+    <section aria-labelledby="my-seasons-title" className="space-y-4">
+      <h2 id="my-seasons-title" className="text-xl font-bold text-slate-50">
+        Mis temporadas
+      </h2>
+      {entryId ? (
+        <SeasonProgressPanel
+          key={entryId}
+          entryId={entryId}
+          seasons={seasons}
+          seriesStatus={seriesStatus}
+          onUnauthorized={onUnauthorized}
+        />
+      ) : (
+        <p className="rounded-xl border border-slate-700 bg-slate-800/50 p-5 text-sm text-slate-300">
+          {checking
+            ? 'Comprobando tu biblioteca…'
+            : 'Añade esta serie a tu biblioteca para seguir tus temporadas vistas.'}
+        </p>
       )}
     </section>
   );
