@@ -15,6 +15,7 @@ import { ApiError } from '../api.js';
 import { LibraryEntryCard } from './LibraryEntryCard.js';
 import { deleteLibraryEntry, listLibrary, updateLibraryEntry } from './library.api.js';
 import { RatingDialog } from '../ratings/RatingDialog.js';
+import { SeasonProgressDialog } from '../seasons/SeasonProgressDialog.js';
 import { getRating } from '../ratings/ratings.api.js';
 
 const VIEW_STORAGE_KEY = 'garquinsfilm:library-view';
@@ -103,6 +104,7 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   const pendingIdsRef = useRef(new Set<string>());
   const [deleteTarget, setDeleteTarget] = useState<LibraryEntryView | null>(null);
   const [ratingTarget, setRatingTarget] = useState<LibraryEntryView | null>(null);
+  const [seasonsTarget, setSeasonsTarget] = useState<LibraryEntryView | null>(null);
   const [ratings, setRatings] = useState<Record<string, RatingView | null>>({});
   const [ratingErrors, setRatingErrors] = useState<Record<string, string>>({});
   const [ratingLoadingIds, setRatingLoadingIds] = useState<Set<string>>(() => new Set());
@@ -524,6 +526,7 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
                 }
                 ratingError={ratingErrors[entry.id]}
                 onManageRating={setRatingTarget}
+                onManageSeasons={setSeasonsTarget}
               />
             ))}
           </div>
@@ -614,6 +617,15 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             </div>
           </div>
         </div>
+      )}
+      {seasonsTarget && (
+        <SeasonProgressDialog
+          key={seasonsTarget.id}
+          entryId={seasonsTarget.id}
+          title={seasonsTarget.media?.title || 'Título no disponible'}
+          onClose={() => setSeasonsTarget(null)}
+          onUnauthorized={() => unauthorizedHandler.current()}
+        />
       )}
       {ratingTarget && (
         <RatingDialog

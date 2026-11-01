@@ -30,6 +30,7 @@ interface LibraryEntryCardProps {
   ratingLoading?: boolean;
   ratingError?: string;
   onManageRating: (entry: LibraryEntryView) => void;
+  onManageSeasons?: (entry: LibraryEntryView) => void;
 }
 
 export function LibraryEntryCard({
@@ -43,6 +44,7 @@ export function LibraryEntryCard({
   ratingLoading = false,
   ratingError = '',
   onManageRating,
+  onManageSeasons,
 }: LibraryEntryCardProps) {
   const title = entry.media?.title || 'Título no disponible';
   const typeLabel = entry.type === 'movie' ? 'Película' : 'Serie';
@@ -109,6 +111,16 @@ export function LibraryEntryCard({
           >
             {ratingActionLabel}
           </button>
+          {entry.type === 'tv' && onManageSeasons && (
+            <button
+              type="button"
+              className="mt-3 min-h-11 w-full cursor-pointer rounded-lg border border-slate-600 bg-slate-900/70 px-3 text-sm font-semibold text-slate-100 transition-colors hover:border-red-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 motion-reduce:transition-none"
+              onClick={() => onManageSeasons(entry)}
+              aria-label={`Mis temporadas de ${title}`}
+            >
+              Mis temporadas
+            </button>
+          )}
           {ratingError && (
             <p role="alert" className="mt-1 text-xs text-red-200">
               {ratingError}
