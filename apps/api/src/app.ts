@@ -16,6 +16,8 @@ import libraryRoutes from './library/library.routes.js';
 import type { LibraryRepository } from './library/library.service.js';
 import ratingRoutes from './ratings/ratings.routes.js';
 import type { RatingRepository } from './ratings/ratings.service.js';
+import seasonProgressRoutes from './season-progress/season-progress.routes.js';
+import type { SeasonProgressRepository } from './season-progress/season-progress.service.js';
 
 interface BuildAppOptions {
   database?: DatabaseHealth;
@@ -24,6 +26,7 @@ interface BuildAppOptions {
   tmdbClient?: TmdbClient;
   libraryRepository?: LibraryRepository;
   ratingRepository?: RatingRepository;
+  seasonProgressRepository?: SeasonProgressRepository;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -58,6 +61,10 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(ratingRoutes, {
     auth: options.auth,
     repository: options.ratingRepository,
+  });
+  app.register(seasonProgressRoutes, {
+    auth: options.auth,
+    repository: options.seasonProgressRepository,
   });
 
   app.register(healthRoute, { database });

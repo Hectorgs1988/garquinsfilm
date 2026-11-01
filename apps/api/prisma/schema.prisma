@@ -68,17 +68,18 @@ model Media {
 }
 
 model LibraryEntry {
-  id          String             @id @default(cuid())
-  userId      String
-  mediaId     String
-  status      LibraryEntryStatus @default(PENDING)
-  isFavorite  Boolean            @default(false)
-  addedAt     DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  completedAt DateTime?
-  rating      Rating?
-  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  media       Media              @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+  id             String             @id @default(cuid())
+  userId         String
+  mediaId        String
+  status         LibraryEntryStatus @default(PENDING)
+  isFavorite     Boolean            @default(false)
+  addedAt        DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  completedAt    DateTime?
+  rating         Rating?
+  seasonProgress SeasonProgress[]
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media          Media              @relation(fields: [mediaId], references: [id], onDelete: Restrict)
 
   @@unique([userId, mediaId])
   @@index([userId, addedAt])
@@ -99,6 +100,17 @@ model Rating {
   libraryEntry     LibraryEntry @relation(fields: [libraryEntryId], references: [id], onDelete: Cascade)
 
   @@map("rating")
+}
+
+model SeasonProgress {
+  id             String       @id @default(cuid())
+  libraryEntryId String
+  seasonNumber   Int
+  completedAt    DateTime     @default(now())
+  libraryEntry   LibraryEntry @relation(fields: [libraryEntryId], references: [id], onDelete: Cascade)
+
+  @@unique([libraryEntryId, seasonNumber])
+  @@map("season_progress")
 }
 
 model Session {
