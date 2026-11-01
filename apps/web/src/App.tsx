@@ -18,6 +18,7 @@ import {
   PasswordField,
 } from './components.js';
 import { CatalogPage } from './catalog/CatalogPage.js';
+import { LibraryPage } from './library/LibraryPage.js';
 
 type Route =
   | '/login'
@@ -25,7 +26,8 @@ type Route =
   | '/forgot-password'
   | '/reset-password'
   | '/app'
-  | '/app/explore';
+  | '/app/explore'
+  | '/app/library';
 
 const PASSWORD_RESET_CONFIRMATION =
   'Si existe una cuenta con ese correo, recibirás las instrucciones para recuperar el acceso.';
@@ -38,7 +40,8 @@ function getRoute(): Route {
     path === '/forgot-password' ||
     path === '/reset-password' ||
     path === '/app' ||
-    path === '/app/explore'
+    path === '/app/explore' ||
+    path === '/app/library'
   ) {
     return path;
   }
@@ -127,7 +130,7 @@ export default function App({ initialAuthHash = '' }: { initialAuthHash?: string
     );
   }
 
-  if (route === '/app' || route === '/app/explore') {
+  if (route === '/app' || route === '/app/explore' || route === '/app/library') {
     if (!user) {
       return (
         <main className="app-shell">
@@ -148,6 +151,11 @@ export default function App({ initialAuthHash = '' }: { initialAuthHash?: string
           } catch {
             setSessionError('No se pudo cerrar la sesión. Inténtalo de nuevo.');
           }
+        }}
+        onUnauthorized={() => {
+          setUser(null);
+          setSessionError('');
+          navigate('/login', true);
         }}
       />
     );
@@ -549,7 +557,7 @@ function ResetPasswordPage({ initialAuthHash }: { initialAuthHash: string }) {
 const privateSections = [
   { label: 'Inicio', icon: '⌂', path: '/app' as const },
   { label: 'Explorar', icon: '⌕', path: '/app/explore' as const },
-  { label: 'Biblioteca', icon: '▤', path: null },
+  { label: 'Biblioteca', icon: '▤', path: '/app/library' as const },
   { label: 'Listas', icon: '▧', path: null },
   { label: 'Rankings', icon: '↗', path: null },
 ];
@@ -559,14 +567,17 @@ function PrivateHome({
   user,
   error,
   onLogout,
+  onUnauthorized,
 }: {
   route: Route;
   user: SessionUser;
   error: string;
   onLogout: () => Promise<void>;
+  onUnauthorized: () => void;
 }) {
   const [loading, setLoading] = useState(false);
   const isExplorePage = route === '/app/explore';
+  const isLibraryPage = route === '/app/library';
 
   async function handleLogout() {
     setLoading(true);
@@ -598,13 +609,17 @@ function PrivateHome({
         </aside>
         <section
           className="private-content"
-          aria-labelledby={isExplorePage ? 'catalog-title' : 'welcome-title'}
+          aria-labelledby={
+            isExplorePage ? 'catalog-title' : isLibraryPage ? 'library-title' : 'welcome-title'
+          }
         >
           {isExplorePage ? (
             <>
               {error && <Alert variant="error">{error}</Alert>}
-              <CatalogPage />
+              <CatalogPage onUnauthorized={onUnauthorized} />
             </>
+          ) : isLibraryPage ? (
+            <LibraryPage onUnauthorized={onUnauthorized} />
           ) : (
             <>
               <div className="welcome-panel">
@@ -627,8 +642,8 @@ function PrivateHome({
 
               <div className="section-heading">
                 <div>
-                  <span className="eyebrow">PRÓXIMAMENTE</span>
-                  <h2>Tu próxima gran historia</h2>
+                  <span className="eyebrow">PARA TI</span>
+                  <h2>Tu espacio personal</h2>
                 </div>
               </div>
 
@@ -637,6 +652,7 @@ function PrivateHome({
                   icon="▤"
                   title="Mi biblioteca"
                   description="Tus películas y series, en un solo lugar."
+                  path="/app/library"
                 />
                 <FeatureCard
                   icon="▧"
@@ -707,11 +723,31 @@ function FeatureCard({
   icon,
   title,
   description,
+  path,
 }: {
   icon: string;
   title: string;
   description: string;
+  path?: Route;
 }) {
+  if (path) {
+    return (
+      <a
+        className="feature-card text-inherit no-underline hover:border-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300"
+        href={path}
+        onClick={handleLink(path)}
+      >
+        <span className="feature-icon" aria-hidden="true">
+          {icon}
+        </span>
+        <div>
+          <h3>{title}</h3>
+          <p>{description}</p>
+        </div>
+      </a>
+    );
+  }
+
   return (
     <article className="feature-card">
       <span className="feature-icon" aria-hidden="true">

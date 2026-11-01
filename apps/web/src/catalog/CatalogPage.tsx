@@ -7,7 +7,7 @@ import { DEMO_MEDIA, getDemoMediaDetail } from './catalog.mock.js';
 
 type CatalogFilter = 'all' | 'movie' | 'tv';
 
-export function CatalogPage() {
+export function CatalogPage({ onUnauthorized }: { onUnauthorized?: () => void } = {}) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<CatalogFilter>('all');
   const [selectedMedia, setSelectedMedia] = useState<MediaSummary | null>(null);
@@ -30,6 +30,7 @@ export function CatalogPage() {
         media={getDemoMediaDetail(selectedMedia) ?? selectedMedia}
         onBack={() => setSelectedMedia(null)}
         isDemo
+        onUnauthorized={onUnauthorized}
       />
     );
   }

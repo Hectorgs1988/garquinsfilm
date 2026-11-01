@@ -1,10 +1,17 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MovieDetail, TvDetail } from '@garquinsfilm/shared';
 
 import { DEMO_DETAILS } from './catalog.mock.js';
 import { MediaDetailPage } from './MediaDetailPage.js';
+import { ApiError } from '../api.js';
+
+const libraryApi = vi.hoisted(() => ({
+  createLibraryEntry: vi.fn(),
+}));
+
+vi.mock('../library/library.api.js', () => libraryApi);
 
 const movie = DEMO_DETAILS.find((item) => item.type === 'movie') as MovieDetail;
 const tv = DEMO_DETAILS.find((item) => item.type === 'tv') as TvDetail;
@@ -12,6 +19,55 @@ const tv = DEMO_DETAILS.find((item) => item.type === 'tv') as TvDetail;
 afterEach(cleanup);
 
 describe('MediaDetailPage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('añade solo la identidad al backend y representa estado inicial y duplicado', async () => {
+    libraryApi.createLibraryEntry.mockResolvedValueOnce({});
+    render(<MediaDetailPage media={movie} onBack={vi.fn()} isDemo />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Añadir a mi biblioteca' }));
+    expect(await screen.findByText('Se añadió con estado Pendiente.')).toBeTruthy();
+    expect(libraryApi.createLibraryEntry).toHaveBeenCalledWith({
+      source: 'tmdb',
+      type: 'movie',
+      tmdbId: movie.tmdbId,
+    });
+
+    cleanup();
+    libraryApi.createLibraryEntry.mockRejectedValueOnce(
+      new ApiError(409, 'This title is already in your library.'),
+    );
+    render(<MediaDetailPage media={movie} onBack={vi.fn()} isDemo />);
+    fireEvent.click(screen.getByRole('button', { name: 'Añadir a mi biblioteca' }));
+
+    expect(await screen.findByRole('button', { name: 'Ya está en mi biblioteca' })).toBeTruthy();
+    expect(
+      screen.getByText('Este título ya estaba añadido; no se creó un duplicado.'),
+    ).toBeTruthy();
+  });
+
+  it('evita múltiples POST al pulsar rápidamente el botón de alta', async () => {
+    let resolveCreate: ((value: unknown) => void) | undefined;
+    libraryApi.createLibraryEntry.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    render(<MediaDetailPage media={movie} onBack={vi.fn()} isDemo />);
+
+    const addButton = screen.getByRole('button', { name: 'Añadir a mi biblioteca' });
+    fireEvent.click(addButton);
+    fireEvent.click(addButton);
+
+    expect(libraryApi.createLibraryEntry).toHaveBeenCalledOnce();
+    expect(addButton.hasAttribute('disabled')).toBe(true);
+    resolveCreate?.({});
+    expect(await screen.findByText('Se añadió con estado Pendiente.')).toBeTruthy();
+  });
+
   it('renderiza metadatos de película, reparto, dirección y disponibilidad ficticia', () => {
     render(<MediaDetailPage media={movie} onBack={vi.fn()} isDemo />);
 

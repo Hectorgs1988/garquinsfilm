@@ -2,7 +2,19 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
-import type { SessionUser } from './api.js';
+import { ApiError, type SessionUser } from './api.js';
+
+const ApiErrorMock = vi.hoisted(
+  () =>
+    class MockApiError extends Error {
+      constructor(
+        readonly status: number,
+        message: string,
+      ) {
+        super(message);
+      }
+    },
+);
 
 const api = vi.hoisted(() => ({
   acceptInvitation: vi.fn(),
@@ -13,7 +25,14 @@ const api = vi.hoisted(() => ({
   signOut: vi.fn(),
 }));
 
-vi.mock('./api.js', () => api);
+const libraryApi = vi.hoisted(() => ({
+  listLibrary: vi.fn(),
+  updateLibraryEntry: vi.fn(),
+  deleteLibraryEntry: vi.fn(),
+}));
+
+vi.mock('./api.js', () => ({ ...api, ApiError: ApiErrorMock }));
+vi.mock('./library/library.api.js', () => libraryApi);
 
 const testUser: SessionUser = {
   id: 'user-1',
@@ -30,6 +49,12 @@ beforeEach(() => {
   api.acceptInvitation.mockResolvedValue({ id: 'new-user' });
   api.requestPasswordReset.mockResolvedValue(undefined);
   api.resetPassword.mockResolvedValue(undefined);
+  libraryApi.listLibrary.mockResolvedValue({
+    page: 1,
+    totalPages: 0,
+    totalResults: 0,
+    results: [],
+  });
   window.history.replaceState(null, '', '/login');
 });
 
@@ -52,7 +77,7 @@ describe('flujo de autenticación y navegación privada', () => {
     expect(api.signIn).toHaveBeenCalledWith('ada@example.test', 'correct-password');
     expect(screen.getByRole('navigation', { name: 'Navegación principal' })).toBeTruthy();
     expect(screen.getByText('Mi biblioteca')).toBeTruthy();
-    expect(screen.getAllByText('Próximamente')).toHaveLength(4);
+    expect(screen.getAllByText('Próximamente')).toHaveLength(3);
   });
 
   it('muestra error genérico ante credenciales rechazadas', async () => {
@@ -292,6 +317,42 @@ describe('flujo de autenticación y navegación privada', () => {
         .getAllByRole('link', { name: 'Explorar' })
         .every((link) => link.getAttribute('aria-current') === 'page'),
     ).toBe(true);
+  });
+
+  it('protege /app/library y activa la navegación cuando existe sesión', async () => {
+    window.history.replaceState(null, '', '/app/library');
+    const { unmount } = render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Qué bueno tenerte de vuelta.' }),
+    ).toBeTruthy();
+
+    unmount();
+    api.getCurrentUser.mockResolvedValue(testUser);
+    window.history.replaceState(null, '', '/app/library');
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Mi biblioteca' })).toBeTruthy();
+    expect(libraryApi.listLibrary).toHaveBeenCalled();
+    expect(
+      screen
+        .getAllByRole('link', { name: 'Biblioteca' })
+        .every((link) => link.getAttribute('aria-current') === 'page'),
+    ).toBe(true);
+  });
+
+  it('limpia el contenido privado y no rebota a /app tras un 401 de biblioteca', async () => {
+    api.getCurrentUser.mockResolvedValueOnce(testUser).mockResolvedValue(null);
+    libraryApi.listLibrary.mockRejectedValueOnce(new ApiError(401, 'unauthorized'));
+    window.history.replaceState(null, '', '/app/library');
+    render(<App />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Qué bueno tenerte de vuelta.' }),
+    ).toBeTruthy();
+    expect(window.location.pathname).toBe('/login');
+    expect(screen.queryByRole('heading', { name: 'Mi biblioteca' })).toBeNull();
+    expect(screen.queryByText('Título privado')).toBeNull();
   });
 
   it('cierra la sesión real y vuelve al login', async () => {

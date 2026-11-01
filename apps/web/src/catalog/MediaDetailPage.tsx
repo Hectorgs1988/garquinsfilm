@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { MediaDetail, MediaSummary, MediaWatchProvider, TvSeason } from '@garquinsfilm/shared';
 
+import { ApiError } from '../api.js';
+import { createLibraryEntry } from '../library/library.api.js';
 import { MediaCredits } from './MediaCredits.js';
 import { TrailerModal } from './TrailerModal.js';
 
@@ -8,6 +10,7 @@ interface MediaDetailPageProps {
   media: MediaSummary | MediaDetail;
   onBack: () => void;
   isDemo?: boolean;
+  onUnauthorized?: () => void;
 }
 
 const dateFormatter = new Intl.DateTimeFormat('es-ES', {
@@ -51,7 +54,17 @@ function isMediaDetail(media: MediaSummary | MediaDetail): media is MediaDetail 
   return 'cast' in media;
 }
 
-export function MediaDetailPage({ media, onBack, isDemo = false }: MediaDetailPageProps) {
+export function MediaDetailPage({
+  media,
+  onBack,
+  isDemo = false,
+  onUnauthorized,
+}: MediaDetailPageProps) {
+  const [libraryState, setLibraryState] = useState<'idle' | 'loading' | 'added' | 'duplicate'>(
+    'idle',
+  );
+  const [libraryError, setLibraryError] = useState('');
+  const addRequestInProgress = useRef(false);
   const detail = isMediaDetail(media) ? media : null;
   const isMovie = media.type === 'movie';
   const releaseDate =
@@ -68,6 +81,37 @@ export function MediaDetailPage({ media, onBack, isDemo = false }: MediaDetailPa
   const overview =
     media.overview?.trim() || 'Todavía no tenemos una sinopsis disponible para este título.';
   const titleId = 'media-detail-title';
+
+  async function addToLibrary() {
+    if (addRequestInProgress.current) return;
+    addRequestInProgress.current = true;
+    setLibraryState('loading');
+    setLibraryError('');
+    try {
+      await createLibraryEntry({
+        source: media.source,
+        type: media.type,
+        tmdbId: media.tmdbId,
+      });
+      setLibraryState('added');
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setLibraryState('duplicate');
+        return;
+      }
+      if (error instanceof ApiError && error.status === 401) {
+        onUnauthorized?.();
+        setLibraryError('Tu sesión ha caducado. Vuelve a iniciar sesión.');
+      } else if (error instanceof ApiError && error.status === 0) {
+        setLibraryError('No se pudo conectar con el servidor. Comprueba tu conexión.');
+      } else {
+        setLibraryError('No se pudo añadir el título a tu biblioteca. Inténtalo de nuevo.');
+      }
+      setLibraryState('idle');
+    } finally {
+      addRequestInProgress.current = false;
+    }
+  }
 
   return (
     <section aria-labelledby={titleId} className="min-w-0 space-y-6 sm:space-y-8">
@@ -194,6 +238,35 @@ export function MediaDetailPage({ media, onBack, isDemo = false }: MediaDetailPa
             </div>
 
             <TrailerModal video={detail?.trailer ?? null} title={media.title} />
+            <div className="space-y-2 pt-1">
+              <button
+                type="button"
+                onClick={() => void addToLibrary()}
+                disabled={libraryState !== 'idle'}
+                aria-busy={libraryState === 'loading'}
+                className="min-h-12 cursor-pointer rounded-xl bg-red-800 px-5 text-sm font-semibold text-white transition-colors hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 disabled:cursor-not-allowed disabled:opacity-70 motion-reduce:transition-none"
+              >
+                {libraryState === 'loading'
+                  ? 'Añadiendo…'
+                  : libraryState === 'added'
+                    ? 'Añadido a mi biblioteca'
+                    : libraryState === 'duplicate'
+                      ? 'Ya está en mi biblioteca'
+                      : 'Añadir a mi biblioteca'}
+              </button>
+              {(libraryState === 'added' || libraryState === 'duplicate') && (
+                <p role="status" className="text-sm text-emerald-300">
+                  {libraryState === 'added'
+                    ? 'Se añadió con estado Pendiente.'
+                    : 'Este título ya estaba añadido; no se creó un duplicado.'}
+                </p>
+              )}
+              {libraryError && (
+                <p role="alert" className="text-sm text-red-200">
+                  {libraryError}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
