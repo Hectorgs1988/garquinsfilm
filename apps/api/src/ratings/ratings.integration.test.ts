@@ -125,6 +125,30 @@ describe.skipIf(!enabled)('personal ratings PostgreSQL integration', () => {
     await repository.delete(userId, entryId);
   });
 
+  it('accepts successive rating updates when they are not overlapping', async () => {
+    const entryId = libraryEntryIds[0];
+    await repository.set(userId, entryId, {
+      score: 5,
+      review: null,
+      containsSpoilers: false,
+    });
+
+    const first = await repository.set(userId, entryId, {
+      score: 6,
+      review: null,
+      containsSpoilers: false,
+    });
+    const second = await repository.set(userId, entryId, {
+      score: 7,
+      review: null,
+      containsSpoilers: false,
+    });
+
+    expect(first?.created).toBe(false);
+    expect(second?.created).toBe(false);
+    expect((await repository.find(userId, entryId)).rating?.score).toBe(7);
+  });
+
   it('serializes concurrent upserts without duplicate rows or an unreported write conflict', async () => {
     const entryId = libraryEntryIds[2];
     const attempts = await Promise.allSettled([
@@ -167,28 +191,72 @@ describe.skipIf(!enabled)('personal ratings PostgreSQL integration', () => {
       containsSpoilers: false,
     });
 
-    const attempts = await Promise.allSettled([
-      repository.set(userId, entryId, {
-        score: 6,
-        review: null,
-        containsSpoilers: false,
-      }),
-      repository.set(userId, entryId, {
-        score: 7,
-        review: null,
-        containsSpoilers: false,
-      }),
-    ]);
-    const successful = attempts.filter((attempt) => attempt.status === 'fulfilled');
-    const rejected = attempts.filter(
-      (attempt): attempt is PromiseRejectedResult => attempt.status === 'rejected',
+    const lockClient = new PrismaClient({
+      adapter: new PrismaPg({ connectionString: getRatingsTestDatabaseUrl() }),
+    });
+    let releaseRowLock!: () => void;
+    let signalRowLocked!: () => void;
+    const rowLockReleased = new Promise<void>((resolve) => {
+      releaseRowLock = resolve;
+    });
+    const rowLocked = new Promise<void>((resolve) => {
+      signalRowLocked = resolve;
+    });
+    const lockTransaction = lockClient.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "rating" WHERE "libraryEntryId" = ${entryId} FOR UPDATE`;
+        signalRowLocked();
+        await rowLockReleased;
+      },
+      { timeout: 30_000 },
     );
+    let attemptsPromise:
+      Promise<PromiseSettledResult<Awaited<ReturnType<typeof repository.set>>>[]> | undefined;
 
-    expect(successful).toHaveLength(1);
-    expect(rejected).toHaveLength(1);
-    expect(rejected[0].reason).toMatchObject({ name: 'RatingConflictError' });
+    try {
+      await Promise.race([
+        rowLocked,
+        lockTransaction.then(() => {
+          throw new Error('The rating lock transaction ended before acquiring its row lock.');
+        }),
+      ]);
+
+      attemptsPromise = Promise.allSettled([
+        repository.set(userId, entryId, {
+          score: 6,
+          review: null,
+          containsSpoilers: false,
+        }),
+        repository.set(userId, entryId, {
+          score: 7,
+          review: null,
+          containsSpoilers: false,
+        }),
+      ]);
+      await waitForBlockedRatingUpdates(prisma, 2);
+      releaseRowLock();
+
+      const attempts = await attemptsPromise;
+      const successful = attempts.filter((attempt) => attempt.status === 'fulfilled');
+      const rejected = attempts.filter(
+        (attempt): attempt is PromiseRejectedResult => attempt.status === 'rejected',
+      );
+
+      expect(successful).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toMatchObject({ name: 'RatingConflictError' });
+    } finally {
+      releaseRowLock();
+      try {
+        await lockTransaction;
+        if (attemptsPromise) await attemptsPromise;
+      } finally {
+        await lockClient.$disconnect();
+      }
+    }
+
     expect([6, 7]).toContain((await repository.find(userId, entryId)).rating?.score);
-  });
+  }, 20_000);
 
   it('enforces database constraints, uniqueness and cascade deletion', async () => {
     const entryId = libraryEntryIds[1];
@@ -288,4 +356,32 @@ function getRatingsTestDatabaseUrl(): string {
     );
   }
   return value;
+}
+
+async function waitForBlockedRatingUpdates(
+  prisma: PrismaClient,
+  expectedCount: number,
+): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  let blockedQueries: string[] = [];
+  while (Date.now() < deadline) {
+    const rows = await prisma.$queryRaw<{ query: string }[]>`
+      SELECT query
+      FROM pg_stat_activity
+      WHERE datname = current_database()
+        AND usename = current_user
+        AND pid <> pg_backend_pid()
+        AND state = 'active'
+        AND wait_event_type = 'Lock'
+    `;
+    blockedQueries = rows.map((row) => row.query);
+    const ratingUpdates = blockedQueries.filter(
+      (query) => query.toLowerCase().includes('update') && query.toLowerCase().includes('rating'),
+    );
+    if (ratingUpdates.length >= expectedCount) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(
+    `Expected ${expectedCount} blocked rating updates, observed queries: ${blockedQueries.join(' | ')}`,
+  );
 }
