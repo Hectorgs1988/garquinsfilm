@@ -7,6 +7,19 @@ interface AuthRoutesOptions {
   auth?: AuthRuntime;
 }
 
+// Endpoints de Better Auth que modifican datos de usuario. El perfil se edita
+// mediante rutas propias con validación del servidor (PROFILE-*).
+const BLOCKED_AUTH_PATHS = new Set([
+  '/api/auth/update-user',
+  '/api/auth/change-email',
+  '/api/auth/delete-user',
+]);
+
+function normalizeAuthPath(pathname: string): string {
+  const trimmed = pathname.replace(/\/+$/, '');
+  return (trimmed === '' ? '/' : trimmed).toLowerCase();
+}
+
 const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, options) => {
   const { baseURL, webAppURL, trustedOrigins } = getAuthConfig();
   const authInstance = options.auth ?? auth;
@@ -35,6 +48,9 @@ const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (app, options) =
               ? request.body
               : JSON.stringify(request.body);
         const requestURL = new URL(request.url, baseURL);
+        if (BLOCKED_AUTH_PATHS.has(normalizeAuthPath(requestURL.pathname))) {
+          return reply.code(403).send({ error: 'Forbidden' });
+        }
         if (
           request.method === 'POST' &&
           requestURL.pathname === '/api/auth/request-password-reset' &&
