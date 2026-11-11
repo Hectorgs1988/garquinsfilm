@@ -221,3 +221,14 @@ Complementa PROD-006 (progreso por temporada completa, sin episodios) y sustituy
 - **Cálculo del progreso:** fuera del backend. SERIES-003 lo calculará con una función pura (excluye temporada 0, cuenta temporadas regulares con `episodeCount > 0`, excluye temporadas claramente futuras, no trata una fecha nula como futura, cuenta elementos reales, muestra progreso indeterminado sin metadatos fiables y presenta aparte las temporadas completadas que ya no figuran en el catálogo).
 - **Sin TMDB y sin ampliar `LibraryEntryView`:** el backend no consulta TMDB ni persiste datos editoriales; la biblioteca no muestra contadores de temporadas. El progreso se consulta al abrir la ficha de la serie.
 - **Fuera del MVP:** seguimiento por episodios e historial de visionados.
+
+## PROFILE-001 — Perfil de usuario
+
+**Estado: APROBADO — modelo en PROFILE-002A; API y UI en tareas posteriores**
+
+- `UserProfile` 1:1 con `User` (`userId` como clave primaria, `ON DELETE CASCADE`). Se crea bajo demanda; su ausencia equivale a perfil vacío.
+- **Nombre visible:** se mantiene en `User.name` y solo se modifica mediante rutas propias con validación del servidor.
+- **Biografía:** opcional, texto plano, máximo 300 caracteres (CHECK en PostgreSQL). Cierra el límite que quedaba por concretar en el documento funcional.
+- **Avatar:** en esta fase, solo iniciales (`initials`) o un avatar predeterminado (`preset` + `avatarKey`). La subida de imágenes queda pospuesta hasta decidir el almacenamiento seguro.
+- **Protección:** `update-user`, `change-email` y `delete-user` de Better Auth quedan bloqueados en el puente Fastify (403 antes de reenviar, con la ruta normalizada).
+- Preferencias de privacidad y estadísticas del perfil: pendientes de diseño en tareas posteriores.
