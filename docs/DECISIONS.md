@@ -228,6 +228,7 @@ Complementa PROD-006 (progreso por temporada completa, sin episodios) y sustituy
 
 - `UserProfile` 1:1 con `User` (`userId` como clave primaria, `ON DELETE CASCADE`). Se crea bajo demanda; su ausencia equivale a perfil vacío.
 - **Nombre visible:** se mantiene en `User.name`; de 1 a 50 caracteres (puntos de código, normalizado a NFC y sin espacios al principio ni al final), sin caracteres de control. Solo se modifica mediante `PATCH /api/me/profile`.
+ La misma regla se aplica al crear cuentas (aceptación de invitación y bootstrap del primer admin).
 - **Biografía:** opcional, texto plano, máximo 300 caracteres (CHECK en PostgreSQL). Cierra el límite que quedaba por concretar en el documento funcional.
 - **Avatar:** solo iniciales (`initials`) hasta cerrar ADR-006. La columna admite `preset`, pero la API no lo expone. La subida de imágenes queda pospuesta hasta decidir el almacenamiento seguro
 - **Protección:** `update-user`, `change-email` y `delete-user` de Better Auth quedan bloqueados en el puente Fastify (403 antes de reenviar, con la ruta normalizada).
