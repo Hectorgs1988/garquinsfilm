@@ -15,6 +15,7 @@
     "test:season-progress:integration": "pnpm prisma:generate && RUN_SEASON_PROGRESS_INTEGRATION_TESTS=1 vitest run src/season-progress/*.integration.test.ts",
     "test:profile:integration": "pnpm prisma:generate && RUN_PROFILE_INTEGRATION_TESTS=1 vitest run src/profile/*.integration.test.ts",
     "test:mailpit": "RUN_MAILPIT_TESTS=1 vitest run src/email/mailpit.integration.test.ts",
+    "test:stats:integration": "pnpm prisma:generate && RUN_STATS_INTEGRATION_TESTS=1 vitest run src/stats/*.integration.test.ts",
     "auth:bootstrap-admin": "tsx src/scripts/bootstrap-admin.ts",
     "auth:create-local-invitation": "tsx src/scripts/create-local-invitation.ts",
     "auth:schema:generate": "auth generate --config src/auth/auth.ts --adapter prisma --dialect postgresql --output prisma/schema.prisma --yes",
