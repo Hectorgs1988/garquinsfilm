@@ -11,6 +11,8 @@ const profileApi = vi.hoisted(() => ({
 }));
 
 vi.mock('./profile.api.js', () => profileApi);
+const statsApi = vi.hoisted(() => ({ getProfileStats: vi.fn() }));
+vi.mock('./stats.api.js', () => statsApi);
 
 import { ProfilePage } from './ProfilePage.js';
 
@@ -54,6 +56,11 @@ beforeEach(() => {
       ...input,
     }),
   );
+  statsApi.getProfileStats.mockResolvedValue({
+    movies: { completed: 0, pending: 0 },
+    series: { completed: 0, pending: 0 },
+    ratings: { average: null, count: 0 },
+  });
 });
 
 afterEach(cleanup);

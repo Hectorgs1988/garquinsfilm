@@ -5,11 +5,11 @@ import {
   type ProfileUpdateInput,
   type ProfileView,
 } from '@garquinsfilm/shared';
-
 import { ApiError, type SessionUser } from '../api.js';
 import { Avatar } from './Avatar.js';
 import { getProfile, updateProfile } from './profile.api.js';
 import { normalizeBioInput, normalizeNameInput, textLength } from './profile.format.js';
+import { ProfileStats } from './ProfileStats.js';
 
 function getErrorMessage(error: unknown, action: 'load' | 'save'): string {
   if (error instanceof ApiError) {
@@ -325,6 +325,7 @@ export function ProfilePage({
           )}
         </div>
       ) : null}
+      {profile && <ProfileStats onUnauthorized={onUnauthorized} />}
     </section>
   );
 }
