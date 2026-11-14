@@ -195,25 +195,62 @@ describe('LibraryPage', () => {
     ).toBeTruthy();
   });
 
-  it('valida y persiste la preferencia grid/list en localStorage', async () => {
-    window.localStorage.setItem('garquinsfilm:library-view', 'unexpected');
-    const { unmount } = render(<LibraryPage onUnauthorized={vi.fn()} />);
-
-    const grid = screen.getByRole('button', { name: 'Vista de cuadrícula' });
-    const list = screen.getByRole('button', { name: 'Vista de lista' });
-    expect(grid.getAttribute('aria-pressed')).toBe('true');
-    expect(list.getAttribute('aria-pressed')).toBe('false');
-
-    fireEvent.click(list);
-    expect(list.getAttribute('aria-pressed')).toBe('true');
-    await waitFor(() => {
-      expect(window.localStorage.getItem('garquinsfilm:library-view')).toBe('list');
-    });
-    unmount();
+  it('pliega el panel de filtros y anuncia cuántos hay activos', async () => {
     render(<LibraryPage onUnauthorized={vi.fn()} />);
-    expect(
-      screen.getByRole('button', { name: 'Vista de lista' }).getAttribute('aria-pressed'),
-    ).toBe('true');
+    await screen.findByText('Título no disponible');
+
+    const toggle = screen.getByRole('button', { name: /Filtros/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.textContent).not.toMatch(/\d/);
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+
+    fireEvent.change(screen.getByLabelText('Filtrar por tipo'), { target: { value: 'tv' } });
+    fireEvent.change(screen.getByLabelText('Filtrar por favoritos'), {
+      target: { value: 'favorites' },
+    });
+    await waitFor(() => expect(toggle.textContent).toContain('2'));
+
+    // El orden no es un filtro y no entra en el recuento.
+    fireEvent.change(screen.getByLabelText('Ordenar por'), {
+      target: { value: 'updatedAt:asc' },
+    });
+    await waitFor(() => expect(toggle.textContent).toContain('2'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar filtros' }));
+    await waitFor(() => expect(toggle.textContent).not.toMatch(/\d/));
+  });
+
+  it('retira solo el aviso de éxito pasados unos segundos', async () => {
+    // Se acorta la espera en lugar de simular temporizadores: React y Testing
+    // Library programan sus propios tiempos y mezclarlos vuelve el test frágil.
+    render(<LibraryPage onUnauthorized={vi.fn()} noticeTimeoutMs={60} />);
+    await screen.findByText('Título no disponible');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Añadir Título no disponible a favoritos' }),
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('status').textContent).toContain('El cambio se guardó');
+    });
+
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+  });
+
+  it('mantiene el error hasta que se cierra a mano', async () => {
+    libraryApi.updateLibraryEntry.mockRejectedValueOnce(new ApiError(503, 'unavailable'));
+    render(<LibraryPage onUnauthorized={vi.fn()} />);
+    await screen.findByText('Título no disponible');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Añadir Título no disponible a favoritos' }),
+    );
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('El servicio no está disponible');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar aviso' }));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('envía filtros y orden al backend y vuelve a la primera página al cambiarlos', async () => {

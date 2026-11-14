@@ -993,3 +993,28 @@ a {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Avisos flotantes: se apoyan sobre la navegación inferior en móvil. */
+.toast-dock {
+  position: fixed;
+  z-index: 6;
+  right: 0;
+  bottom: calc(5.1rem + var(--safe-bottom));
+  left: 0;
+  display: grid;
+  justify-items: center;
+  padding-inline: 1rem;
+  pointer-events: none;
+}
+
+.toast-dock > * {
+  width: 100%;
+  max-width: 32rem;
+  pointer-events: auto;
+}
+
+@media (min-width: 960px) {
+  .toast-dock {
+    bottom: 1.5rem;
+  }
+}
