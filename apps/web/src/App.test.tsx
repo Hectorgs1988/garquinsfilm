@@ -23,6 +23,7 @@ const api = vi.hoisted(() => ({
   resetPassword: vi.fn(),
   signIn: vi.fn(),
   signOut: vi.fn(),
+  request: vi.fn(),
 }));
 
 const libraryApi = vi.hoisted(() => ({

@@ -20,33 +20,33 @@ import {
 } from './components.js';
 import { CatalogPage } from './catalog/CatalogPage.js';
 import { LibraryPage } from './library/LibraryPage.js';
-
-type Route =
-  | '/login'
-  | '/accept-invitation'
-  | '/forgot-password'
-  | '/reset-password'
-  | '/app'
-  | '/app/explore'
-  | '/app/library';
+import { ProfilePage } from './profile/ProfilePage.js';
+import { Avatar } from './profile/Avatar.js';
 
 const PASSWORD_RESET_CONFIRMATION =
   'Si existe una cuenta con ese correo, recibirás las instrucciones para recuperar el acceso.';
 
+const PRIVATE_ROUTES = ['/app', '/app/explore', '/app/library', '/app/profile'] as const;
+const PUBLIC_ROUTES = [
+  '/login',
+  '/accept-invitation',
+  '/forgot-password',
+  '/reset-password',
+] as const;
+
+type PrivateRoute = (typeof PRIVATE_ROUTES)[number];
+type Route = PrivateRoute | (typeof PUBLIC_ROUTES)[number];
+
+const KNOWN_ROUTES: readonly string[] = [...PRIVATE_ROUTES, ...PUBLIC_ROUTES];
+
+function isPrivateRoute(route: Route): route is PrivateRoute {
+  return (PRIVATE_ROUTES as readonly string[]).includes(route);
+}
+
 function getRoute(): Route {
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
   if (path === '/' || path === '/login') return '/login';
-  if (
-    path === '/accept-invitation' ||
-    path === '/forgot-password' ||
-    path === '/reset-password' ||
-    path === '/app' ||
-    path === '/app/explore' ||
-    path === '/app/library'
-  ) {
-    return path;
-  }
-  return '/login';
+  return KNOWN_ROUTES.includes(path) ? (path as Route) : '/login';
 }
 
 function navigate(path: Route, replace = false): void {
@@ -131,7 +131,7 @@ export default function App({ initialAuthHash = '' }: { initialAuthHash?: string
     );
   }
 
-  if (route === '/app' || route === '/app/explore' || route === '/app/library') {
+  if (isPrivateRoute(route)) {
     if (!user) {
       return (
         <main className="app-shell">
@@ -158,6 +158,7 @@ export default function App({ initialAuthHash = '' }: { initialAuthHash?: string
           setSessionError('');
           navigate('/login', true);
         }}
+        onProfileSaved={(name) => setUser((current) => (current ? { ...current, name } : current))}
       />
     );
   }
@@ -569,16 +570,19 @@ function PrivateHome({
   error,
   onLogout,
   onUnauthorized,
+  onProfileSaved,
 }: {
-  route: Route;
+  route: PrivateRoute;
   user: SessionUser;
   error: string;
   onLogout: () => Promise<void>;
   onUnauthorized: () => void;
+  onProfileSaved: (name: string) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const isExplorePage = route === '/app/explore';
   const isLibraryPage = route === '/app/library';
+  const isProfilePage = route === '/app/profile';
 
   async function handleLogout() {
     setLoading(true);
@@ -597,7 +601,16 @@ function PrivateHome({
           <span>GarquinsFilm</span>
         </a>
         <div className="header-actions">
-          <span className="user-chip">{user.name || user.email}</span>
+          <a
+            className={`profile-chip ${isProfilePage ? 'is-current' : ''}`.trim()}
+            href="/app/profile"
+            onClick={handleLink('/app/profile')}
+            aria-current={isProfilePage ? 'page' : undefined}
+          >
+            <Avatar name={user.name} email={user.email} size="sm" />
+            <span className="user-chip">{user.name || user.email}</span>
+            <span className="sr-only">Mi perfil</span>
+          </a>
           <Button variant="quiet" loading={loading} onClick={() => void handleLogout()}>
             Cerrar sesión
           </Button>
@@ -611,7 +624,13 @@ function PrivateHome({
         <section
           className="private-content"
           aria-labelledby={
-            isExplorePage ? 'catalog-title' : isLibraryPage ? 'library-title' : 'welcome-title'
+            isExplorePage
+              ? 'catalog-title'
+              : isLibraryPage
+                ? 'library-title'
+                : isProfilePage
+                  ? 'profile-title'
+                  : 'welcome-title'
           }
         >
           {isExplorePage ? (
@@ -621,6 +640,12 @@ function PrivateHome({
             </>
           ) : isLibraryPage ? (
             <LibraryPage onUnauthorized={onUnauthorized} />
+          ) : isProfilePage ? (
+            <ProfilePage
+              user={user}
+              onUnauthorized={onUnauthorized}
+              onProfileSaved={onProfileSaved}
+            />
           ) : (
             <>
               <div className="welcome-panel">
