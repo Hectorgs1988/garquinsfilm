@@ -30,7 +30,14 @@ describe.skipIf(!enabled)('profile stats PostgreSQL integration', () => {
     });
     mediaIds.push(media.id);
     const entry = await prisma.libraryEntry.create({
-      data: { id: `stats-entry-${randomUUID()}`, userId: ownerId, mediaId: media.id, status },
+      data: {
+        id: `stats-entry-${randomUUID()}`,
+        userId: ownerId,
+        mediaId: media.id,
+        status,
+        // `library_entry_completedAt_consistent` exige la fecha solo en COMPLETED.
+        completedAt: status === 'COMPLETED' ? new Date() : null,
+      },
     });
     if (scoreTenths !== undefined) {
       await prisma.rating.create({
