@@ -234,3 +234,11 @@ Complementa PROD-006 (progreso por temporada completa, sin episodios) y sustituy
 - **Protección:** `update-user`, `change-email` y `delete-user` de Better Auth quedan bloqueados en el puente Fastify (403 antes de reenviar, con la ruta normalizada).
 - Preferencias de privacidad y estadísticas del perfil: pendientes de diseño en tareas posteriores.
 - **Estadísticas (PROFILE-003):** `GET /api/me/stats` privado. Cuenta títulos, no temporadas: películas y series con estado `COMPLETED` y con estado `PENDING`, por separado. `WATCHING` y `ABANDONED` no se cuentan. La media usa solo las puntuaciones existentes, en décimas enteras redondeadas a un decimal; sin puntuaciones se devuelve `null` y la interfaz muestra «Sin valoraciones», nunca una media de cero. La puntuación cero sí entra en la media; una reseña sin nota, no.
+
+## LIBRARY-005 — Metadatos en la biblioteca
+
+**Estado: APROBADO**
+
+- La biblioteca sigue guardando solo la identidad (`source`, `type`, `tmdbId`): no se persisten títulos ni imágenes, a la espera de TMDB-TERMS-001.
+- Los metadatos se resuelven en el servidor al responder, reutilizando la caché del catálogo, de modo que el cliente hace una sola petición en lugar de una por título.
+- La resolución es best-effort: concurrencia limitada a 6, tope de 2 s y degradación a `media: null` ante cualquier fallo. La biblioteca nunca depende de TMDB para responder.
