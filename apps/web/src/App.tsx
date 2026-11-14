@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent, type MouseEvent, type ReactNode } from 'react';
+import { PROFILE_NAME_MAX_LENGTH } from '@garquinsfilm/shared';
 import {
   acceptInvitation,
   getCurrentUser,
@@ -367,7 +368,7 @@ function InvitationPage({ initialAuthHash }: { initialAuthHash: string }) {
             value={name}
             onChange={setName}
             required
-            maxLength={128}
+            maxLength={PROFILE_NAME_MAX_LENGTH}
             placeholder="Cómo te llamamos"
           />
           <PasswordField

@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient } from '../generated/prisma/client.js';
 import { USER_ROLES } from './roles.js';
 import { createCredentialUser, hashCredentialPassword, validatePassword } from './users.service.js';
 import { normalizeEmail } from './invitations.service.js';
+import { normalizeProfileName } from '../profile/profile.validation.js';
 
 export class AdminAlreadyBootstrappedError extends Error {
   constructor(options?: ErrorOptions) {
@@ -20,9 +21,11 @@ export async function bootstrapFirstAdmin(
   beforeTransaction: () => Promise<void>,
 ): Promise<{ id: string; email: string; role: string }> {
   const email = normalizeEmail(input.email);
-  const name = input.name.trim();
-  if (!name || name.length > 128) {
-    throw new Error('A display name between 1 and 128 characters is required.');
+  let name: string;
+  try {
+    name = normalizeProfileName(input.name);
+  } catch {
+    throw new Error('A display name between 1 and 50 characters is required.');
   }
   validatePassword(input.password);
   const passwordHash = await hashCredentialPassword(input.password);

@@ -88,4 +88,23 @@ describe('bootstrapFirstAdmin', () => {
 
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
+
+  it.each(['x'.repeat(51), '   '])(
+    'rejects an invalid display name %j before hashing or opening a transaction',
+    async (name) => {
+      const prisma = { $transaction: vi.fn() } as unknown as PrismaClient;
+
+      await expect(
+        bootstrapFirstAdmin(
+          prisma,
+          { email: 'admin@example.test', name, password: 'valid-password-123' },
+          async () => {
+            operations.push('validate-destination');
+          },
+        ),
+      ).rejects.toThrow('A display name between 1 and 50 characters is required.');
+      expect(operations).toEqual([]);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    },
+  );
 });

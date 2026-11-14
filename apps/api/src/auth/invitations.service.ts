@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { InvitationStatus, type PrismaClient } from '../generated/prisma/client.js';
 import { USER_ROLES } from './roles.js';
 import { createCredentialUser, hashCredentialPassword, validatePassword } from './users.service.js';
+import { normalizeProfileName } from '../profile/profile.validation.js';
 
 export const INVITATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -182,7 +183,10 @@ export async function acceptInvitation(
 ): Promise<{ id: string; name: string; email: string; role: string }> {
   const email = normalizeEmail(input.email);
   validatePassword(input.password);
-  if (!input.name.trim() || input.name.trim().length > 128) {
+  let name: string;
+  try {
+    name = normalizeProfileName(input.name);
+  } catch {
     throw new InvalidInvitationInputError();
   }
   const tokenHash = hashInvitationToken(input.token);
@@ -205,7 +209,7 @@ export async function acceptInvitation(
 
     const user = await createCredentialUser(tx, {
       email,
-      name: input.name.trim(),
+      name: name,
       passwordHash,
       role: USER_ROLES.user,
       emailVerified: true,
