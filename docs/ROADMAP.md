@@ -5,7 +5,7 @@
 - Registrar stack y reglas funcionales aprobadas en ADR y documentos de producto.
 - Validación en ejecución del core Better Auth/adaptador Prisma 1.7.11, puente Fastify 5.12.7, Prisma 7.10.1 y PostgreSQL 17 aislado completada en la rama AUTH-001B; queda confirmar CI/revisión y revalidar cualquier cambio de versión.
 - SMTP local con Mailpit y recuperación Better Auth están implementados y probados; las pruebas automatizadas usan un remitente simulado. No se ha aprobado un proveedor remoto de producción.
-- Condiciones de TMDB (TMDB-TERMS-001): **PENDIENTE** de validación por el responsable. La arquitectura de la integración está aprobada en ADR-007 (TMDB-DOC-001); ninguna tarea de implementación TMDB está iniciada.
+- Condiciones de TMDB (TMDB-TERMS-001): **PENDIENTE** de validación por el responsable. La arquitectura de la integración está aprobada en ADR-007 (TMDB-DOC-001) y la integración está implementada e integrada en `develop`; TMDB-TERMS-001 sigue siendo requisito previo de cualquier puesta en producción del catálogo.
 - Mantener hosting, staging/producción, identidad visual y criterios de rankings de series como pendientes.
 
 **Salida:** contratos documentales coherentes; compatibilidad y dependencias externas conocidas; pendientes sin decisiones implícitas.
@@ -38,28 +38,29 @@
 
 ## Fase 2 — Catálogo, biblioteca y valoraciones
 
-Catálogo TMDB (ADR-007: React → Fastify → TMDB, caché en memoria, contratos en `packages/shared`). Todas las tareas están **pendientes de implementación**; su documentación (TMDB-DOC-001) no las marca como hechas:
+Catálogo TMDB (ADR-007: React → Fastify → TMDB, caché en memoria, contratos en `packages/shared`). **Todas las tareas están implementadas e integradas en `develop`** (PR #12 a #16):
 
-1. **TMDB-DOC-001** — Documentación y ADR-007 (Architect). Documentación redactada; pendiente de revisión y PR.
-2. **TMDB-API-001** — Cliente TMDB, configuración y errores (Backend). Incluye cerrar el consumo de `packages/shared`.
-3. **TMDB-API-002** — Búsqueda, validación, normalización y caché (Backend).
-4. **TMDB-API-003** — Detalles de películas y series (Backend).
-5. **WEB-CATALOG-001** — Búsqueda Mobile First y atribución TMDB (Frontend).
-6. **WEB-CATALOG-002** — Fichas de películas y series (Frontend).
+1. **TMDB-DOC-001** — Documentación y ADR-007 (Architect). Integrada en `develop` (PR #12).
+2. **TMDB-API-001** — Cliente TMDB, configuración y errores (Backend). Integrada en `develop` (PR #13).
+3. **TMDB-API-002** — Búsqueda, validación, normalización y caché (Backend). Integrada en `develop` (PR #14).
+4. **TMDB-API-003** — Detalles de películas y series (Backend). Integrada en `develop` (PR #15).
+5. **WEB-CATALOG-001** — Búsqueda Mobile First y atribución TMDB (Frontend). Integrada en `develop` (PR #16).
+6. **WEB-CATALOG-002** — Fichas de películas y series (Frontend). Integrada en `develop` (PR #16).
 
-Dependencias y criterios en `docs/TASKS.md`. Cada tarea va en su rama `feature/*` con PR a `develop`. TMDB-TERMS-001 sigue pendiente.
+Dependencias y criterios en `docs/TASKS.md`. Ninguna está desplegada en producción y TMDB-TERMS-001 sigue pendiente, por lo que la puesta en producción del catálogo continúa bloqueada.
 
-- Biblioteca personal sin duplicados; funciona con la identidad externa aunque no haya metadatos de catálogo. Valoraciones solo para títulos guardados.
+- Biblioteca personal (LIBRARY-002 y LIBRARY-003) y valoraciones (RATINGS-002 y RATINGS-003) están implementadas e integradas en `develop` (PR #17 a #20). Biblioteca sin duplicados; funciona con la identidad externa aunque no haya metadatos de catálogo. Valoraciones solo para títulos guardados.
 - Rating privado independiente 1:1 con LibraryEntry; nota 0,0–10,0 en incrementos de 0,1 (cero válido), reseña opcional en texto plano ≤2.000 puntos Unicode y marcador de spoilers. No se exponen valoraciones de terceros.
 - Mantener separada la nota personal de la puntuación TMDB; favoritos, estados, filtros y orden no se alteran al puntuar.
 - Estados comunes para películas y series: pendiente, viendo, completado y abandonado; se permiten transiciones entre ellos.
 - Sin entradas adicionales, historial ni contadores de visionados en el MVP.
+- Perfil propio: modelo `UserProfile`, API `GET`/`PATCH /api/me/profile` y pantalla `/app/profile` implementados e integrados en `develop` (PROFILE-002A a PROFILE-002C). Las estadísticas del perfil (PROFILE-003) y las preferencias de privacidad siguen sin implementar; los avatares se limitan a iniciales hasta cerrar ADR-006.
 
 **Demo:** dos usuarios guardan el mismo título y gestionan estados y valoraciones independientes.
 
 ## Fase 3 — Temporadas y listas compartidas
 
-- Progreso por temporadas completas, sin seguimiento de episodios: SERIES-002 (backend, implementado localmente) y SERIES-003 (interfaz, implementada localmente; pendiente de QA y PR).
+- Progreso por temporadas completas, sin seguimiento de episodios: SERIES-002 (backend) y SERIES-003 (interfaz) están implementados e integrados en `develop` (PR #21 y #22).
 - Listas compartidas con adición y retirada de títulos por miembros.
 - Solo el propietario administra miembros y elimina la lista.
 - Pruebas de permisos y aislamiento.
