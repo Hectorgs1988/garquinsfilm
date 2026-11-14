@@ -209,7 +209,7 @@ Cada usuario tendrá un perfil con:
 
 - **Nombre visible** editable, independiente de las credenciales de inicio de sesión.
 - **Avatar** mediante opciones predeterminadas o imagen aportada por el usuario, sujeto a validación de tamaño, formato y almacenamiento seguro.
-- **Descripción breve opcional** con límite de longitud por concretar.
+- **Descripción breve opcional** de hasta 300 caracteres (ver PROFILE-001 en `docs/DECISIONS.md`).
 - **Preferencias de privacidad** de biblioteca, valoraciones/reseñas y actividad, privadas por defecto.
 - Correo no visible en el perfil para otros usuarios.
 - Acceso a perfiles reservado a usuarios autenticados durante la primera etapa.
