@@ -20,6 +20,8 @@ import seasonProgressRoutes from './season-progress/season-progress.routes.js';
 import type { SeasonProgressRepository } from './season-progress/season-progress.service.js';
 import profileRoutes from './profile/profile.routes.js';
 import type { ProfileRepository } from './profile/profile.service.js';
+import statsRoutes from './stats/stats.routes.js';
+import type { StatsRepository } from './stats/stats.service.js';
 
 interface BuildAppOptions {
   database?: DatabaseHealth;
@@ -30,6 +32,7 @@ interface BuildAppOptions {
   ratingRepository?: RatingRepository;
   seasonProgressRepository?: SeasonProgressRepository;
   profileRepository?: ProfileRepository;
+  statsRepository?: StatsRepository;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -72,6 +75,10 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(profileRoutes, {
     auth: options.auth,
     repository: options.profileRepository,
+  });
+  app.register(statsRoutes, {
+    auth: options.auth,
+    repository: options.statsRepository,
   });
 
   app.register(healthRoute, { database });
