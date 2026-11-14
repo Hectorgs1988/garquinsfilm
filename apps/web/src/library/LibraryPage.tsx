@@ -18,10 +18,10 @@ import { RatingDialog } from '../ratings/RatingDialog.js';
 import { SeasonProgressDialog } from '../seasons/SeasonProgressDialog.js';
 import { getRating } from '../ratings/ratings.api.js';
 
-const VIEW_STORAGE_KEY = 'garquinsfilm:library-view';
 const PAGE_SIZE = 20;
+/** Tiempo que permanece un aviso de éxito antes de retirarse solo. */
+export const NOTICE_TIMEOUT_MS = 5000;
 
-type ViewMode = 'grid' | 'list';
 type TypeFilter = MediaType | 'all';
 type StatusFilter = LibraryEntryStatus | 'all';
 type FavoriteFilter = 'all' | 'favorites';
@@ -32,15 +32,6 @@ interface Filters {
   favorite: FavoriteFilter;
   sortBy: LibrarySortBy;
   sortOrder: LibrarySortOrder;
-}
-
-function readViewPreference(): ViewMode {
-  try {
-    const stored = window.localStorage.getItem(VIEW_STORAGE_KEY);
-    return stored === 'list' || stored === 'grid' ? stored : 'grid';
-  } catch {
-    return 'grid';
-  }
 }
 
 function toListQuery(filters: Filters, page: number): LibraryListQuery {
@@ -85,8 +76,15 @@ function getRatingErrorMessage(error: unknown): string {
   return 'No se pudo cargar tu valoración. Abre el editor para volver a intentarlo.';
 }
 
-export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) {
-  const [view, setView] = useState<ViewMode>(readViewPreference);
+export function LibraryPage({
+  onUnauthorized,
+  noticeTimeoutMs = NOTICE_TIMEOUT_MS,
+}: {
+  onUnauthorized: () => void;
+  /** Solo se cambia en las pruebas, para no esperar el tiempo real del aviso. */
+  noticeTimeoutMs?: number;
+}) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<Filters>({
     type: 'all',
     status: 'all',
@@ -121,13 +119,12 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
     unauthorizedHandler.current = onUnauthorized;
   }, [onUnauthorized]);
 
+  // Los avisos de éxito se retiran solos; los errores esperan a la siguiente acción.
   useEffect(() => {
-    try {
-      window.localStorage.setItem(VIEW_STORAGE_KEY, view);
-    } catch {
-      // La vista sigue funcionando aunque el navegador no permita persistir preferencias.
-    }
-  }, [view]);
+    if (!actionNotice) return undefined;
+    const timer = window.setTimeout(() => setActionNotice(''), noticeTimeoutMs);
+    return () => window.clearTimeout(timer);
+  }, [actionNotice, noticeTimeoutMs]);
 
   useEffect(() => {
     let active = true;
@@ -269,8 +266,22 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
   }
 
   const results = result?.results ?? [];
-  const isFiltered =
-    filters.type !== 'all' || filters.status !== 'all' || filters.favorite !== 'all';
+  const activeFilterCount =
+    (filters.type === 'all' ? 0 : 1) +
+    (filters.status === 'all' ? 0 : 1) +
+    (filters.favorite === 'all' ? 0 : 1);
+  const isFiltered = activeFilterCount > 0;
+
+  function clearFilters() {
+    setFilters({
+      type: 'all',
+      status: 'all',
+      favorite: 'all',
+      sortBy: 'addedAt',
+      sortOrder: 'desc',
+    });
+    setPage(1);
+  }
 
   useEffect(() => {
     const entriesToLoad = results.filter(
@@ -327,8 +338,34 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         </p>
       </header>
 
-      <div className="space-y-4 rounded-2xl border border-slate-700 bg-slate-800/60 p-4 sm:p-5">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-slate-400" aria-live="polite">
+            {loading
+              ? 'Actualizando biblioteca…'
+              : `${result?.totalResults ?? 0} ${result?.totalResults === 1 ? 'entrada' : 'entradas'}`}
+          </p>
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((open) => !open)}
+            aria-expanded={filtersOpen}
+            aria-controls="library-filters"
+            className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-slate-600 px-3 text-sm font-semibold text-slate-200 hover:border-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 sm:hidden"
+          >
+            <span aria-hidden="true">⚙</span>
+            Filtros
+            {activeFilterCount > 0 && (
+              <span className="rounded-full bg-red-800 px-2 text-xs font-bold text-white">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div
+          id="library-filters"
+          className={`${filtersOpen ? 'grid' : 'hidden'} gap-3 rounded-2xl border border-slate-700 bg-slate-800/60 p-4 sm:grid sm:grid-cols-2 sm:p-5 lg:grid-cols-4`}
+        >
           <label className="grid gap-1.5 text-xs font-medium text-slate-300">
             Tipo
             <select
@@ -397,53 +434,18 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
               <option value="updatedAt:asc">Actualizados hace más tiempo</option>
             </select>
           </label>
-        </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-700 pt-4">
-          <p className="text-sm text-slate-400" aria-live="polite">
-            {loading
-              ? 'Actualizando biblioteca…'
-              : `${result?.totalResults ?? 0} ${result?.totalResults === 1 ? 'entrada' : 'entradas'}`}
-          </p>
-          <div className="flex gap-2" role="group" aria-label="Modo de visualización">
+          {isFiltered && (
             <button
               type="button"
-              aria-label="Vista de cuadrícula"
-              aria-pressed={view === 'grid'}
-              onClick={() => setView('grid')}
-              className="min-h-11 min-w-11 cursor-pointer rounded-lg border border-slate-600 px-3 text-sm text-slate-200 hover:border-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 aria-pressed:border-red-500 aria-pressed:bg-red-950/60"
+              onClick={clearFilters}
+              className="min-h-11 cursor-pointer rounded-lg border border-slate-600 px-4 text-sm font-semibold text-slate-100 hover:border-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 sm:col-span-2 lg:col-span-4"
             >
-              <span aria-hidden="true">▦</span>
+              Quitar filtros
             </button>
-            <button
-              type="button"
-              aria-label="Vista de lista"
-              aria-pressed={view === 'list'}
-              onClick={() => setView('list')}
-              className="min-h-11 min-w-11 cursor-pointer rounded-lg border border-slate-600 px-3 text-sm text-slate-200 hover:border-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300 aria-pressed:border-red-500 aria-pressed:bg-red-950/60"
-            >
-              <span aria-hidden="true">☰</span>
-            </button>
-          </div>
+          )}
         </div>
       </div>
-
-      {actionError && (
-        <div
-          role="alert"
-          className="rounded-xl border border-red-800 bg-red-950/50 p-4 text-sm text-red-200"
-        >
-          {actionError}
-        </div>
-      )}
-      {actionNotice && (
-        <p
-          role="status"
-          className="rounded-xl border border-emerald-800 bg-emerald-950/40 p-4 text-sm text-emerald-200"
-        >
-          {actionNotice}
-        </p>
-      )}
 
       {loading ? (
         <div
@@ -484,16 +486,7 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
           {isFiltered && (
             <button
               type="button"
-              onClick={() => {
-                setFilters({
-                  type: 'all',
-                  status: 'all',
-                  favorite: 'all',
-                  sortBy: 'addedAt',
-                  sortOrder: 'desc',
-                });
-                setPage(1);
-              }}
+              onClick={clearFilters}
               className="mt-4 min-h-11 cursor-pointer rounded-lg border border-slate-600 px-4 text-sm font-semibold text-slate-100 hover:border-red-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300"
             >
               Quitar filtros
@@ -502,15 +495,11 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
         </div>
       ) : (
         <>
-          <div
-            aria-busy={pendingIds.size > 0}
-            className={view === 'grid' ? 'grid gap-4 sm:grid-cols-2 xl:grid-cols-3' : 'space-y-3'}
-          >
+          <div aria-busy={pendingIds.size > 0} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {results.map((entry) => (
               <LibraryEntryCard
                 key={entry.id}
                 entry={entry}
-                view={view}
                 busy={pendingIds.has(entry.id)}
                 onStatusChange={(current, status) => {
                   if (current.status !== status) void changeEntry(current, { status });
@@ -555,6 +544,34 @@ export function LibraryPage({ onUnauthorized }: { onUnauthorized: () => void }) 
             </button>
           </nav>
         </>
+      )}
+
+      {(actionError || actionNotice) && (
+        <div className="toast-dock">
+          {actionError ? (
+            <div
+              role="alert"
+              className="flex items-start gap-3 rounded-xl border border-red-800 bg-red-950/95 p-4 text-sm text-red-100 shadow-lg shadow-black/40"
+            >
+              <span className="flex-1">{actionError}</span>
+              <button
+                type="button"
+                onClick={() => setActionError('')}
+                aria-label="Cerrar aviso"
+                className="-m-2 cursor-pointer p-2 text-lg leading-none text-red-200 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-300"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+          ) : (
+            <p
+              role="status"
+              className="rounded-xl border border-emerald-800 bg-emerald-950/95 p-4 text-sm text-emerald-100 shadow-lg shadow-black/40"
+            >
+              {actionNotice}
+            </p>
+          )}
+        </div>
       )}
 
       {deleteTarget && (

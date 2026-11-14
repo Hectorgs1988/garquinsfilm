@@ -21,7 +21,6 @@ function formatDate(value: string): string {
 
 interface LibraryEntryCardProps {
   entry: LibraryEntryView;
-  view: 'grid' | 'list';
   busy: boolean;
   onStatusChange: (entry: LibraryEntryView, status: LibraryEntryStatus) => void;
   onToggleFavorite: (entry: LibraryEntryView) => void;
@@ -35,7 +34,6 @@ interface LibraryEntryCardProps {
 
 export function LibraryEntryCard({
   entry,
-  view,
   busy,
   onStatusChange,
   onToggleFavorite,
@@ -60,12 +58,10 @@ export function LibraryEntryCard({
 
   return (
     <article
-      className={`min-w-0 rounded-2xl border border-slate-700 bg-slate-800/80 p-4 shadow-lg shadow-black/10 ${
-        view === 'list' ? 'sm:flex sm:items-center sm:gap-5' : 'space-y-4'
-      }`}
+      className="min-w-0 space-y-4 rounded-2xl border border-slate-700 bg-slate-800/80 p-4 shadow-lg shadow-black/10"
       aria-label={`${title}, ${typeLabel}`}
     >
-      <div className={`min-w-0 ${view === 'list' ? 'sm:flex-1' : 'space-y-3'}`}>
+      <div className="min-w-0 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-slate-50" title={title}>
@@ -97,9 +93,7 @@ export function LibraryEntryCard({
         </div>
       </div>
 
-      <div
-        className={`grid gap-3 ${view === 'list' ? 'mt-4 sm:mt-0 sm:w-64 sm:grid-cols-2' : 'grid-cols-2'}`}
-      >
+      <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <button
             type="button"
@@ -137,7 +131,7 @@ export function LibraryEntryCard({
             </div>
           )}
         </div>
-        <label className="col-span-2 grid gap-1.5 text-xs font-medium text-slate-300 sm:col-span-2">
+        <label className="col-span-2 grid gap-1.5 text-xs font-medium text-slate-300">
           Estado
           <select
             aria-label={`Estado de ${title}`}
