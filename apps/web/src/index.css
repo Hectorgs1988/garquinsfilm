@@ -537,6 +537,34 @@ a {
   white-space: nowrap;
 }
 
+.profile-chip {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding-inline: 0.35rem;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background 140ms ease;
+}
+
+.profile-chip:hover {
+  background: rgb(51 65 85 / 45%);
+}
+
+.profile-chip.is-current {
+  background: rgb(51 65 85 / 55%);
+}
+
+.sr-only {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .private-header .button {
   min-height: 2.75rem;
   padding-inline: 0.6rem;
