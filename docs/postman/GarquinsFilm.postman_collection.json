@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "12e3cc45-40ff-47c5-9bb9-5002e936b5e9",
+    "_postman_id": "23f93da4-04d4-49e1-8c99-50ed2893a2a9",
     "name": "GarquinsFilm API (local)",
-    "description": "Pruebas manuales contra la API local. Ejecutar en orden con el Collection Runner. Las credenciales van en el entorno, nunca en la colección. Las carpetas 4–6 crean datos de prueba y la 9 los elimina.",
+    "description": "Pruebas manuales contra la API local. Ejecutar en orden con el Collection Runner. Las credenciales van en el entorno, nunca en la colección. Las carpetas 4 a 7 crean datos y la 9 los elimina: usa un usuario de pruebas.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "event": [
@@ -11,7 +11,7 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// La API exige un Origin de confianza en peticiones con cookies.",
+          "// La API exige un Origin de confianza en las peticiones con cookies.",
           "if (!pm.request.headers.has('Origin')) {",
           "  pm.request.headers.add({ key: 'Origin', value: pm.variables.get('origin') });",
           "}"
@@ -33,11 +33,31 @@
       "value": ""
     },
     {
+      "key": "myUserId",
+      "value": ""
+    },
+    {
       "key": "movieEntryId",
       "value": ""
     },
     {
       "key": "tvEntryId",
+      "value": ""
+    },
+    {
+      "key": "listId",
+      "value": ""
+    },
+    {
+      "key": "listItemId",
+      "value": ""
+    },
+    {
+      "key": "listVersion",
+      "value": ""
+    },
+    {
+      "key": "listVersion2",
       "value": ""
     }
   ],
@@ -135,7 +155,7 @@
                 }
               }
             },
-            "description": "Guarda la cookie de sesión en el cookie jar de Postman. Límite: 5 intentos por minuto."
+            "description": "Guarda la cookie de sesión. Límite: 5 intentos por minuto."
           },
           "event": [
             {
@@ -151,7 +171,7 @@
           ]
         },
         {
-          "name": "Usuario actual (/api/me)",
+          "name": "Usuario actual",
           "request": {
             "method": "GET",
             "header": [],
@@ -174,7 +194,8 @@
                 "exec": [
                   "pm.test('Estado 200', () => pm.response.to.have.status(200));",
                   "const me = pm.response.json();",
-                  "pm.test('Incluye id y rol', () => { pm.expect(me.user.id).to.be.a('string'); pm.expect(me.user.role).to.be.oneOf(['admin', 'user']); });"
+                  "pm.test('Incluye id y rol', () => { pm.expect(me.user.id).to.be.a('string'); pm.expect(me.user.role).to.be.oneOf(['admin','user']); });",
+                  "pm.collectionVariables.set('myUserId', me.user.id);"
                 ]
               }
             }
@@ -203,7 +224,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Saltándose la validación\"\n}",
+              "raw": "{\n  \"name\": \"Sin validar\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -246,7 +267,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Saltándose la validación\"\n}",
+              "raw": "{\n  \"name\": \"Sin validar\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -340,9 +361,83 @@
                   "pm.test('Estado 200', () => pm.response.to.have.status(200));",
                   "pm.test('Cache-Control private, no-store', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));",
                   "const p = pm.response.json();",
-                  "pm.test('Forma del perfil', () => { pm.expect(p).to.have.keys(['name', 'bio', 'avatar']); pm.expect(p.avatar).to.eql({ kind: 'initials' }); });",
+                  "pm.test('Forma del perfil', () => { pm.expect(p).to.have.keys(['name','bio','avatar']); pm.expect(p.avatar).to.eql({ kind: 'initials' }); });",
                   "pm.test('No expone el email', () => pm.expect(pm.response.text()).to.not.include('@'));",
                   "pm.collectionVariables.set('originalName', p.name);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estadísticas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/stats",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "stats"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Cache-Control private, no-store', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));",
+                  "const s = pm.response.json();",
+                  "pm.test('Forma de las estadísticas', () => {",
+                  "  pm.expect(s.movies).to.have.keys(['completed','pending']);",
+                  "  pm.expect(s.series).to.have.keys(['completed','pending']);",
+                  "  pm.expect(s.ratings.count).to.be.a('number');",
+                  "});",
+                  "pm.test('Sin valoraciones la media es null, nunca cero', () => {",
+                  "  if (s.ratings.count === 0) pm.expect(s.ratings.average).to.be.null;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: parámetro inesperado en estadísticas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/stats?userId=otro",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "stats"
+              ],
+              "query": [
+                {
+                  "key": "userId",
+                  "value": "otro"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 400', () => pm.response.to.have.status(400));"
                 ]
               }
             }
@@ -437,7 +532,7 @@
           ]
         },
         {
-          "name": "Borrar bio (cadena vacía)",
+          "name": "Borrar bio",
           "request": {
             "method": "PATCH",
             "header": [
@@ -632,7 +727,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"avatarKind\": \"preset\",\n  \"avatarKey\": \"preset-01\"\n}",
+              "raw": "{\n  \"avatarKind\": \"preset\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -676,49 +771,6 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Estado 400', () => pm.response.to.have.status(400));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Error: nombre solo espacios",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/me/profile",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "me",
-                "profile"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"   \"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -808,7 +860,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"bio\": \"No debería guardarse\"\n}",
+              "raw": "{\n  \"bio\": \"No guardar\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -870,7 +922,55 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Estado 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Tiene resultados', () => pm.expect(pm.response.json().results).to.be.an('array'));"
+                  "const body = pm.response.json();",
+                  "pm.test('Devuelve resultados reales de TMDB', () => {",
+                  "  pm.expect(body.results).to.be.an('array').that.is.not.empty;",
+                  "  pm.expect(body.results[0].title).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar solo series",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/search?q=thrones&type=tv&page=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "thrones"
+                },
+                {
+                  "key": "type",
+                  "value": "tv"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Todos los resultados son series', () => body.results.forEach((r) => pm.expect(r.type).to.eql('tv')));"
                 ]
               }
             }
@@ -900,7 +1000,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Estado 200', () => pm.response.to.have.status(200));"
+                  "pm.test('Estado 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Trae datos ampliados', () => pm.expect(pm.response.json().cast).to.be.an('array'));"
                 ]
               }
             }
@@ -930,7 +1031,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Estado 200', () => pm.response.to.have.status(200));"
+                  "pm.test('Estado 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Trae temporadas', () => pm.expect(pm.response.json().seasons).to.be.an('array'));"
                 ]
               }
             }
@@ -951,6 +1053,48 @@
                 "media",
                 "movie",
                 "abc"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: búsqueda vacía",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/search?q=&type=all&page=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": ""
+                },
+                {
+                  "key": "type",
+                  "value": "all"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                }
               ]
             }
           },
@@ -1008,12 +1152,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Estado 201 o 409', () => pm.expect(pm.response.code).to.be.oneOf([201, 409]));",
-                  "function rememberEntry(code, varName, type, tmdbId) {",
-                  "  if (code === 201) { pm.collectionVariables.set(varName, pm.response.json().id); return; }",
-                  "  // 409: ya estaba en la biblioteca; \"Listar biblioteca\" recupera el id.",
-                  "  pm.collectionVariables.unset(varName);",
-                  "}",
-                  "rememberEntry(pm.response.code, 'movieEntryId');"
+                  "if (pm.response.code === 201) pm.collectionVariables.set('movieEntryId', pm.response.json().id);",
+                  "else pm.collectionVariables.unset('movieEntryId');"
                 ]
               }
             }
@@ -1056,12 +1196,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Estado 201 o 409', () => pm.expect(pm.response.code).to.be.oneOf([201, 409]));",
-                  "function rememberEntry(code, varName, type, tmdbId) {",
-                  "  if (code === 201) { pm.collectionVariables.set(varName, pm.response.json().id); return; }",
-                  "  // 409: ya estaba en la biblioteca; \"Listar biblioteca\" recupera el id.",
-                  "  pm.collectionVariables.unset(varName);",
-                  "}",
-                  "rememberEntry(pm.response.code, 'tvEntryId');"
+                  "if (pm.response.code === 201) pm.collectionVariables.set('tvEntryId', pm.response.json().id);",
+                  "else pm.collectionVariables.unset('tvEntryId');"
                 ]
               }
             }
@@ -1097,8 +1233,7 @@
                 "exec": [
                   "pm.test('Estado 200', () => pm.response.to.have.status(200));",
                   "pm.test('Cache-Control private, no-store', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));",
-                  "const body = pm.response.json();",
-                  "const items = body.results ?? body.items ?? [];",
+                  "const items = pm.response.json().results ?? [];",
                   "const find = (type, tmdbId) => items.find((e) => e.type === type && String(e.tmdbId) === String(tmdbId));",
                   "if (!pm.collectionVariables.get('movieEntryId')) {",
                   "  const m = find('movie', pm.variables.get('movieTmdbId'));",
@@ -1108,9 +1243,14 @@
                   "  const t = find('tv', pm.variables.get('tvTmdbId'));",
                   "  if (t) pm.collectionVariables.set('tvEntryId', t.id);",
                   "}",
-                  "pm.test('Ids de prueba localizados', () => {",
+                  "pm.test('Ids localizados', () => {",
                   "  pm.expect(pm.collectionVariables.get('movieEntryId')).to.be.ok;",
                   "  pm.expect(pm.collectionVariables.get('tvEntryId')).to.be.ok;",
+                  "});",
+                  "pm.test('LIBRARY-005: los títulos llegan con metadatos', () => {",
+                  "  const m = find('movie', pm.variables.get('movieTmdbId'));",
+                  "  pm.expect(m.media, 'media no debería ser null para un tmdbId real').to.not.be.null;",
+                  "  pm.expect(m.media.title).to.be.a('string');",
                   "});"
                 ]
               }
@@ -1183,7 +1323,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Estado 200', () => pm.response.to.have.status(200));"
+                  "pm.test('Estado 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Conserva el título tras el cambio', () => pm.expect(pm.response.json().media).to.not.be.null);"
                 ]
               }
             }
@@ -1516,8 +1657,579 @@
       ]
     },
     {
+      "name": "7. Listas",
+      "item": [
+        {
+          "name": "Crear lista",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"  Lista de Postman  \",\n  \"description\": \"Creada por la colección\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 201', () => pm.response.to.have.status(201));",
+                  "const list = pm.response.json();",
+                  "pm.test('Nombre recortado', () => pm.expect(list.name).to.eql('Lista de Postman'));",
+                  "pm.test('Nace personal y con acceso de propietario', () => {",
+                  "  pm.expect(list.mode).to.eql('personal');",
+                  "  pm.expect(list.access).to.eql('owner');",
+                  "  pm.expect(list.itemCount).to.eql(0);",
+                  "});",
+                  "pm.collectionVariables.set('listId', list.id);",
+                  "pm.collectionVariables.set('listVersion', list.updatedAt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar mis listas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Cache-Control private, no-store', () => pm.expect(pm.response.headers.get('Cache-Control')).to.eql('private, no-store'));",
+                  "const results = pm.response.json().results;",
+                  "pm.test('Incluye la lista recién creada', () => pm.expect(results.map((l) => l.id)).to.include(pm.collectionVariables.get('listId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Añadir película a la lista",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/{{listId}}/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists",
+                "{{listId}}",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source\": \"tmdb\",\n  \"type\": \"movie\",\n  \"tmdbId\": {{movieTmdbId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 201', () => pm.response.to.have.status(201));",
+                  "const item = pm.response.json();",
+                  "pm.test('Primera posición', () => pm.expect(item.position).to.eql(1));",
+                  "pm.collectionVariables.set('listItemId', item.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Añadir serie a la lista",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/{{listId}}/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists",
+                "{{listId}}",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source\": \"tmdb\",\n  \"type\": \"tv\",\n  \"tmdbId\": {{tvTmdbId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Segunda posición', () => pm.expect(pm.response.json().position).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ver lista con sus títulos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/{{listId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists",
+                "{{listId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 200', () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json();",
+                  "pm.test('Dos títulos en orden', () => {",
+                  "  pm.expect(list.items).to.have.lengthOf(2);",
+                  "  pm.expect(list.items.map((i) => i.position)).to.eql([1, 2]);",
+                  "});",
+                  "pm.test('LIST-003: los títulos llegan con metadatos', () => pm.expect(list.items[0].media.title).to.be.a('string'));",
+                  "pm.collectionVariables.set('listVersion2', list.updatedAt);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: título repetido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/{{listId}}/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists",
+                "{{listId}}",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source\": \"tmdb\",\n  \"type\": \"movie\",\n  \"tmdbId\": {{movieTmdbId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: tmdbId inválido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/{{listId}}/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists",
+                "{{listId}}",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source\": \"tmdb\",\n  \"type\": \"movie\",\n  \"tmdbId\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Renombrar lista",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/{{listId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists",
+                "{{listId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lista renombrada\",\n  \"expectedUpdatedAt\": \"{{listVersion2}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Nombre cambiado', () => pm.expect(pm.response.json().name).to.eql('Lista renombrada'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: renombrar sin versión",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/{{listId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists",
+                "{{listId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sin versión\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: renombrar con versión antigua",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/{{listId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists",
+                "{{listId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tarde\",\n  \"expectedUpdatedAt\": \"{{listVersion}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Conflicto por edición simultánea', () => pm.expect(pm.response.json().error).to.include('changed'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Quitar un título",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/{{listId}}/items/{{listItemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists",
+                "{{listId}}",
+                "items",
+                "{{listItemId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: lista inexistente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/no-existe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists",
+                "no-existe"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 404', () => pm.response.to.have.status(404));",
+                  "pm.test('404 y no 403: no confirma si la lista existe', () => pm.expect(pm.response.json().error).to.eql('List not found.'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Error: origen no permitido",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "https://evil.example"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"No crear\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "9. Limpieza y cierre",
       "item": [
+        {
+          "name": "Eliminar lista de prueba",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists/{{listId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists",
+                "{{listId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 204', () => pm.response.to.have.status(204));",
+                  "pm.collectionVariables.unset('listId');"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "Eliminar película de prueba",
           "request": {
@@ -1635,6 +2347,34 @@
                 "api",
                 "me",
                 "profile"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Estado 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin sesión: listas da 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/lists",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "lists"
               ]
             }
           },
