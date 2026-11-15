@@ -52,6 +52,9 @@ model User {
   auditEvents        AuditEvent[]   @relation("AuditActor")
   libraryEntries     LibraryEntry[]
   profile            UserProfile?
+  ownedLists      MediaList[]
+  listMemberships MediaListMember[]
+  listItemsAdded  MediaListItem[]   @relation("MediaListItemAuthor")
 
   @@unique([email])
   @@map("user")
@@ -76,6 +79,7 @@ model Media {
   type           MediaType
   tmdbId         Int
   libraryEntries LibraryEntry[]
+  listItems MediaListItem[]
 
   @@unique([source, type, tmdbId])
   @@map("media")
@@ -205,4 +209,56 @@ model AuditEvent {
   @@index([actorUserId, createdAt])
   @@index([action, createdAt])
   @@map("audit_event")
+}
+
+enum MediaListRole {
+  READER
+  EDITOR
+}
+
+model MediaList {
+  id          String   @id
+  ownerId     String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner   User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members MediaListMember[]
+  items   MediaListItem[]
+
+  @@index([ownerId, updatedAt])
+  @@map("media_list")
+}
+
+model MediaListMember {
+  listId  String
+  userId  String
+  role    MediaListRole
+  addedAt DateTime      @default(now())
+
+  list MediaList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([listId, userId])
+  @@index([userId])
+  @@map("media_list_member")
+}
+
+model MediaListItem {
+  id        String   @id
+  listId    String
+  mediaId   String
+  addedById String?
+  position  Int
+  addedAt   DateTime @default(now())
+
+  list    MediaList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  media   Media     @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+  addedBy User?     @relation("MediaListItemAuthor", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@unique([listId, mediaId])
+  @@unique([listId, position], map: "media_list_item_listId_position_key")
+  @@map("media_list_item")
 }
