@@ -22,6 +22,8 @@ import profileRoutes from './profile/profile.routes.js';
 import type { ProfileRepository } from './profile/profile.service.js';
 import statsRoutes from './stats/stats.routes.js';
 import type { StatsRepository } from './stats/stats.service.js';
+import listsRoutes from './lists/lists.routes.js';
+import type { ListRepository } from './lists/lists.service.js';
 
 interface BuildAppOptions {
   database?: DatabaseHealth;
@@ -33,6 +35,7 @@ interface BuildAppOptions {
   seasonProgressRepository?: SeasonProgressRepository;
   profileRepository?: ProfileRepository;
   statsRepository?: StatsRepository;
+  listRepository?: ListRepository;
 }
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -79,6 +82,10 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.register(statsRoutes, {
     auth: options.auth,
     repository: options.statsRepository,
+  });
+  app.register(listsRoutes, {
+    auth: options.auth,
+    repository: options.listRepository,
   });
 
   app.register(healthRoute, { database });

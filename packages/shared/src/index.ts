@@ -4,3 +4,4 @@ export * from './rating.js';
 export * from './season-progress.js';
 export * from './profile.js';
 export * from './profile-stats.js';
+export * from './list.js';
