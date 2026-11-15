@@ -9,7 +9,7 @@ import { auth, type AuthRuntime } from '../auth/auth.js';
 import { getAuthConfig } from '../auth/config.js';
 import { getPrismaClient } from '../db/client.js';
 import { createCatalogDetailService } from '../catalog/catalog.detail.js';
-import { enrichEntries, toMediaSummary, type MediaSummaryLoader } from './library.enrich.js';
+import { enrichEntries, toMediaSummary, type MediaSummaryLoader } from '../catalog/media.enrich.js';
 import {
   createLibraryService,
   LibraryDuplicateEntryError,

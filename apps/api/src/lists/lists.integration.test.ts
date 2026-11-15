@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../generated/prisma/client.js';
-import { ListUpdateConflictError, PrismaListRepository } from './lists.service.js';
+import {
+  ListItemDuplicateError,
+  ListUpdateConflictError,
+  PrismaListRepository,
+} from './lists.service.js';
 
 const enabled = process.env.RUN_LISTS_INTEGRATION_TESTS === '1';
 
@@ -31,6 +35,9 @@ describe.skipIf(!enabled)('shared lists PostgreSQL integration', () => {
   afterAll(async () => {
     if (!prisma) return;
     await prisma.user.deleteMany({ where: { id: { in: [ownerId, readerId, strangerId] } } });
+    await prisma.media.deleteMany({
+      where: { tmdbId: { in: [438631, 1399, 27205, 157336] }, libraryEntries: { none: {} } },
+    });
     await prisma.$disconnect();
   });
 
@@ -54,13 +61,13 @@ describe.skipIf(!enabled)('shared lists PostgreSQL integration', () => {
     await prisma.mediaListMember.create({
       data: { listId: created.id, userId: readerId, role: 'READER' },
     });
-    expect((await repository.find(ownerId, created.id))?.mode).toBe('shared');
+    expect((await repository.findDetail(ownerId, created.id))?.mode).toBe('shared');
 
     await prisma.mediaListMember.update({
       where: { listId_userId: { listId: created.id, userId: readerId } },
       data: { role: 'EDITOR' },
     });
-    expect((await repository.find(ownerId, created.id))?.mode).toBe('collaborative');
+    expect((await repository.findDetail(ownerId, created.id))?.mode).toBe('collaborative');
   });
 
   it('reports the access of whoever is asking', async () => {
@@ -69,9 +76,9 @@ describe.skipIf(!enabled)('shared lists PostgreSQL integration', () => {
       data: { listId: created.id, userId: readerId, role: 'READER' },
     });
 
-    expect((await repository.find(ownerId, created.id))?.access).toBe('owner');
-    expect((await repository.find(readerId, created.id))?.access).toBe('reader');
-    expect(await repository.find(strangerId, created.id)).toBeNull();
+    expect((await repository.findDetail(ownerId, created.id))?.access).toBe('owner');
+    expect((await repository.findDetail(readerId, created.id))?.access).toBe('reader');
+    expect(await repository.findDetail(strangerId, created.id)).toBeNull();
   });
 
   it('lists what each user can see, and nothing else', async () => {
@@ -135,6 +142,80 @@ describe.skipIf(!enabled)('shared lists PostgreSQL integration', () => {
         data: { description: 'x'.repeat(301) },
       }),
     ).rejects.toThrow();
+  });
+
+  it('adds titles in order and refuses the same one twice', async () => {
+    const created = await repository.create(ownerId, { name: 'Con títulos' });
+
+    const first = await repository.addItem(ownerId, created.id, {
+      source: 'tmdb',
+      type: 'movie',
+      tmdbId: 438631,
+    });
+    const second = await repository.addItem(ownerId, created.id, {
+      source: 'tmdb',
+      type: 'tv',
+      tmdbId: 1399,
+    });
+
+    expect(first?.position).toBe(1);
+    expect(second?.position).toBe(2);
+    expect(second?.addedBy?.id).toBe(ownerId);
+
+    await expect(
+      repository.addItem(ownerId, created.id, { source: 'tmdb', type: 'movie', tmdbId: 438631 }),
+    ).rejects.toBeInstanceOf(ListItemDuplicateError);
+
+    const detail = await repository.findDetail(ownerId, created.id);
+    expect(detail?.items.map((item) => item.tmdbId)).toEqual([438631, 1399]);
+    expect(detail?.itemCount).toBe(2);
+  });
+
+  it('lets editors add titles but not readers', async () => {
+    const created = await repository.create(ownerId, { name: 'Colaborativa' });
+    await prisma.mediaListMember.create({
+      data: { listId: created.id, userId: readerId, role: 'READER' },
+    });
+
+    expect(
+      await repository.addItem(readerId, created.id, {
+        source: 'tmdb',
+        type: 'movie',
+        tmdbId: 27205,
+      }),
+    ).toBeNull();
+
+    await prisma.mediaListMember.update({
+      where: { listId_userId: { listId: created.id, userId: readerId } },
+      data: { role: 'EDITOR' },
+    });
+
+    const added = await repository.addItem(readerId, created.id, {
+      source: 'tmdb',
+      type: 'movie',
+      tmdbId: 27205,
+    });
+    expect(added?.addedBy?.id).toBe(readerId);
+  });
+
+  it('removes a title and moves the list version forward', async () => {
+    const created = await repository.create(ownerId, { name: 'Para vaciar' });
+    const added = await repository.addItem(ownerId, created.id, {
+      source: 'tmdb',
+      type: 'movie',
+      tmdbId: 157336,
+    });
+    const afterAdd = await repository.findDetail(ownerId, created.id);
+
+    expect(await repository.removeItem(strangerId, created.id, added?.id ?? '')).toBe(false);
+    expect(await repository.removeItem(ownerId, created.id, added?.id ?? '')).toBe(true);
+    expect(await repository.removeItem(ownerId, created.id, added?.id ?? '')).toBe(false);
+
+    const afterRemove = await repository.findDetail(ownerId, created.id);
+    expect(afterRemove?.items).toEqual([]);
+    expect(Date.parse(afterRemove?.updatedAt ?? '')).toBeGreaterThanOrEqual(
+      Date.parse(afterAdd?.updatedAt ?? ''),
+    );
   });
 
   it('takes the lists away when the owner is deleted', async () => {

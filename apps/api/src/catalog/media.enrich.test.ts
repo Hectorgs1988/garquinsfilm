@@ -1,6 +1,11 @@
 import type { LibraryEntryView, MediaSummary } from '@garquinsfilm/shared';
 import { describe, expect, it, vi } from 'vitest';
-import { enrichEntries, toMediaSummary, type MediaSummaryLoader } from './library.enrich.js';
+import {
+  enrichEntries,
+  toMediaSummary,
+  type EnrichableItem,
+  type MediaSummaryLoader,
+} from './media.enrich.js';
 
 function entry(overrides: Partial<LibraryEntryView> = {}): LibraryEntryView {
   return {
@@ -119,6 +124,23 @@ describe('library enrichment', () => {
 
     expect(peak).toBeLessThanOrEqual(3);
     expect(result.every((item) => item.media !== null)).toBe(true);
+  });
+
+  it('works with any item that carries an identity, not only library entries', async () => {
+    const loader = loaderOf({ 'movie:1': summary(1, 'Dune') });
+    // Sin anotar, `media: null` se infiere como el literal null y el resultado sería `never`.
+    const listItem: EnrichableItem & { id: string; position: number } = {
+      id: 'item-1',
+      position: 1,
+      type: 'movie',
+      tmdbId: 1,
+      media: null,
+    };
+
+    const [result] = await enrichEntries([listItem], loader);
+
+    expect(result?.media?.title).toBe('Dune');
+    expect(result?.position).toBe(1);
   });
 
   it('copies only the summary fields out of a detail', () => {

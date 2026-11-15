@@ -1,18 +1,28 @@
 import {
+  LIST_MAX_ITEMS,
   LIST_MAX_PER_USER,
   type MediaListAccess,
   type MediaListCreateInput,
+  type MediaListDetailView,
+  type MediaListItemCreateInput,
+  type MediaListItemView,
   type MediaListMode,
   type MediaListUpdateInput,
   type MediaListView,
 } from '@garquinsfilm/shared';
-import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '../generated/prisma/client.js';
 
 export class ListLimitReachedError extends Error {
   constructor() {
     super('The list limit has been reached.');
     this.name = 'ListLimitReachedError';
+  }
+}
+
+export class ListItemDuplicateError extends Error {
+  constructor() {
+    super('That title is already in the list.');
+    this.name = 'ListItemDuplicateError';
   }
 }
 
@@ -25,8 +35,14 @@ export class ListUpdateConflictError extends Error {
 
 export interface ListRepository {
   list(userId: string): Promise<MediaListView[]>;
+  findDetail(userId: string, listId: string): Promise<MediaListDetailView | null>;
+  addItem(
+    userId: string,
+    listId: string,
+    input: MediaListItemCreateInput,
+  ): Promise<MediaListItemView | null>;
+  removeItem(userId: string, listId: string, itemId: string): Promise<boolean>;
   create(userId: string, input: MediaListCreateInput): Promise<MediaListView>;
-  find(userId: string, listId: string): Promise<MediaListView | null>;
   update(
     userId: string,
     listId: string,
@@ -46,6 +62,22 @@ const listSelect = {
   members: { select: { userId: true, role: true } },
   _count: { select: { items: true } },
 } as const;
+
+const itemSelect = {
+  id: true,
+  position: true,
+  addedAt: true,
+  media: { select: { type: true, tmdbId: true } },
+  addedBy: { select: { id: true, name: true } },
+} as const;
+
+interface SelectedItem {
+  id: string;
+  position: number;
+  addedAt: Date;
+  media: { type: 'movie' | 'tv'; tmdbId: number };
+  addedBy: { id: string; name: string } | null;
+}
 
 interface SelectedList {
   id: string;
@@ -78,7 +110,6 @@ export class PrismaListRepository implements ListRepository {
 
       return tx.mediaList.create({
         data: {
-          id: randomUUID(),
           ownerId: userId,
           name: input.name,
           description: input.description ?? null,
@@ -87,17 +118,6 @@ export class PrismaListRepository implements ListRepository {
       });
     });
     return toView(created, userId) as MediaListView;
-  }
-
-  async find(userId: string, listId: string): Promise<MediaListView | null> {
-    const row = await this.prisma.mediaList.findUnique({
-      where: { id: listId },
-      select: listSelect,
-    });
-    if (!row) return null;
-    const view = toView(row, userId);
-    // Sin acceso se responde como si no existiera: un 403 confirmaría la lista.
-    return isVisible(view) ? view : null;
   }
 
   async update(
@@ -127,6 +147,91 @@ export class PrismaListRepository implements ListRepository {
     });
   }
 
+  async findDetail(userId: string, listId: string): Promise<MediaListDetailView | null> {
+    const row = await this.prisma.mediaList.findUnique({
+      where: { id: listId },
+      select: { ...listSelect, items: { select: itemSelect, orderBy: { position: 'asc' } } },
+    });
+    if (!row) return null;
+
+    const view = toView(row, userId);
+    if (!view) return null;
+    return { ...view, items: row.items.map(toItemView) };
+  }
+
+  async addItem(
+    userId: string,
+    listId: string,
+    input: MediaListItemCreateInput,
+  ): Promise<MediaListItemView | null> {
+    return this.prisma.$transaction(async (tx) => {
+      // Bloquea la lista para que dos altas simultáneas no repitan posición.
+      const locked = await tx.$queryRaw<
+        { id: string }[]
+      >`SELECT "id" FROM "media_list" WHERE "id" = ${listId} FOR UPDATE`;
+      if (locked.length === 0) return null;
+
+      const list = await tx.mediaList.findUniqueOrThrow({
+        where: { id: listId },
+        select: { ownerId: true, members: { select: { userId: true, role: true } } },
+      });
+      if (!canEdit(list, userId)) return null;
+
+      const total = await tx.mediaListItem.count({ where: { listId } });
+      if (total >= LIST_MAX_ITEMS) throw new ListLimitReachedError();
+
+      const media = await tx.media.upsert({
+        where: {
+          source_type_tmdbId: { source: input.source, type: input.type, tmdbId: input.tmdbId },
+        },
+        create: { source: input.source, type: input.type, tmdbId: input.tmdbId },
+        update: {},
+        select: { id: true },
+      });
+
+      const existing = await tx.mediaListItem.findUnique({
+        where: { listId_mediaId: { listId, mediaId: media.id } },
+        select: { id: true },
+      });
+      if (existing) throw new ListItemDuplicateError();
+
+      const last = await tx.mediaListItem.findFirst({
+        where: { listId },
+        orderBy: { position: 'desc' },
+        select: { position: true },
+      });
+
+      const created = await tx.mediaListItem.create({
+        data: {
+          listId,
+          mediaId: media.id,
+          addedById: userId,
+          position: (last?.position ?? 0) + 1,
+        },
+        select: itemSelect,
+      });
+      // Añadir un título cambia la lista, así que su versión avanza.
+      await tx.mediaList.update({ where: { id: listId }, data: { updatedAt: new Date() } });
+      return toItemView(created);
+    });
+  }
+
+  async removeItem(userId: string, listId: string, itemId: string): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const list = await tx.mediaList.findUnique({
+        where: { id: listId },
+        select: { ownerId: true, members: { select: { userId: true, role: true } } },
+      });
+      if (!list || !canEdit(list, userId)) return false;
+
+      const removed = await tx.mediaListItem.deleteMany({ where: { id: itemId, listId } });
+      if (removed.count === 0) return false;
+
+      await tx.mediaList.update({ where: { id: listId }, data: { updatedAt: new Date() } });
+      return true;
+    });
+  }
+
   async delete(userId: string, listId: string): Promise<boolean> {
     const result = await this.prisma.mediaList.deleteMany({
       where: { id: listId, ownerId: userId },
@@ -151,6 +256,27 @@ export function toView(row: SelectedList, viewerId: string): MediaListView | nul
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+export function toItemView(item: SelectedItem): MediaListItemView {
+  return {
+    id: item.id,
+    position: item.position,
+    addedAt: item.addedAt.toISOString(),
+    addedBy: item.addedBy,
+    type: item.media.type,
+    tmdbId: item.media.tmdbId,
+    media: null,
+  };
+}
+
+/** Propietario y editores pueden tocar los títulos; los lectores, no. */
+export function canEdit(
+  list: { ownerId: string; members: { userId: string; role: string }[] },
+  userId: string,
+): boolean {
+  if (list.ownerId === userId) return true;
+  return list.members.some((member) => member.userId === userId && member.role === 'EDITOR');
 }
 
 function resolveAccess(row: SelectedList, viewerId: string): MediaListAccess | null {
