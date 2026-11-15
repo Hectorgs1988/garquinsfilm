@@ -1,4 +1,11 @@
-import type { LibraryEntryView, MediaSummary, MediaType } from '@garquinsfilm/shared';
+import type { MediaSummary, MediaType } from '@garquinsfilm/shared';
+
+/** Cualquier cosa que identifique un título y pueda llevar sus metadatos al lado. */
+export interface EnrichableItem {
+  type: MediaType;
+  tmdbId: number;
+  media: MediaSummary | null;
+}
 
 /** Tiempo máximo que la biblioteca espera a TMDB antes de responder sin títulos. */
 export const ENRICH_TIMEOUT_MS = 2000;
@@ -38,7 +45,7 @@ export function toMediaSummary(detail: MediaSummary): MediaSummary {
  * cualquier fallo, carencia de configuración o demora deja la entrada como estaba:
  * nunca propaga el error ni retiene la respuesta más de `timeoutMs`.
  */
-export async function enrichEntries<T extends LibraryEntryView>(
+export async function enrichEntries<T extends EnrichableItem>(
   entries: T[],
   loader: MediaSummaryLoader | null,
   options: EnrichOptions = {},

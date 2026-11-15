@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuthRuntime } from '../auth/auth.js';
 import libraryRoutes from './library.routes.js';
-import type { MediaSummaryLoader } from './library.enrich.js';
+import type { MediaSummaryLoader } from '../catalog/media.enrich.js';
 import type { LibraryRepository } from './library.service.js';
 
 const userId = 'library-owner';

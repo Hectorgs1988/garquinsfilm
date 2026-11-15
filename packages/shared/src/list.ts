@@ -1,4 +1,4 @@
-import type { MediaSummary } from './catalog.js';
+import type { MediaIdentity, MediaSummary } from './catalog.js';
 
 export const MEDIA_LIST_ROLES = ['READER', 'EDITOR'] as const;
 export type MediaListRole = (typeof MEDIA_LIST_ROLES)[number];
@@ -42,6 +42,12 @@ export interface MediaListItemView {
 
 export interface MediaListDetailView extends MediaListView {
   items: MediaListItemView[];
+}
+
+export interface MediaListItemCreateInput {
+  source: MediaIdentity['source'];
+  type: MediaIdentity['type'];
+  tmdbId: number;
 }
 
 export interface MediaListCreateInput {
